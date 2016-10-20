@@ -1,6 +1,16 @@
 use std::vec::Vec;
 use std::string::String;
 
+struct Property {
+    name: String,
+    value: Vec<Vec<String>>,
+    display_mode: i8
+}
+
+struct Socket {
+    
+}
+
 struct Item {
     verified: bool,
     width: i8,
