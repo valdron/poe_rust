@@ -1,16 +1,29 @@
 use std::vec::Vec;
 use std::string::String;
 
+enum Reqs {
+    String,
+    I64
+}
+#[derive(Serialize, Deserialize)]
+struct Requirement {
+    name: String,
+    values: Vec<Vec<Reqs>>,
+    display_mode: i8
+
+}
+#[derive(Serialize, Deserialize)]
 struct Property {
     name: String,
     value: Vec<Vec<String>>,
     display_mode: i8
 }
-
+#[derive(Serialize, Deserialize)]
 struct Socket {
-    
+    group: i8,
+    attribute: String,
 }
-
+#[derive(Serialize, Deserialize)]
 struct Item {
     verified: bool,
     width: i8,
@@ -19,7 +32,7 @@ struct Item {
     icon: String,
     league: String,
     item_id: String,
-    sockets: Vec<Sockets>,
+    sockets: Vec<Socket>,
     name: String,
     base_item: String,
     identified: bool,
@@ -39,7 +52,7 @@ struct Item {
     socketed_items: Vec<Item>
 
 }
-
+#[derive(Serialize, Deserialize)]
 struct Stash {
     acc_name: String,
     last_char_name: String,
@@ -50,7 +63,7 @@ struct Stash {
     is_public: bool
 
 }
-
+#[derive(Serialize, Deserialize)]
 struct JsonSite {
     next_id: String,
     stashes: Vec<Stash>

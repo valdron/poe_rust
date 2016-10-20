@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["Paul <seehofer.paul@gmail.com>"]
 
 [dependencies]
+serde = ""
 serde_json = ""
 hyper = ""
