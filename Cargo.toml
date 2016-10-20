@@ -1,0 +1,8 @@
+[package]
+name = "net"
+version = "0.1.0"
+authors = ["Paul <seehofer.paul@gmail.com>"]
+
+[dependencies]
+serde_json = ""
+hyper = ""
