@@ -1,16 +1,12 @@
-use std::vec::Vec;
-use std::string::String;
 
-#[derive(Serialize, Deserialize)]
-enum Req{
-    str(String),
-    int(i8)
-}
+
+
+
 
 #[derive(Serialize, Deserialize)]
 struct Requirement {
     name: String,
-    values: Vec<Vec<Req>>,
+    values: Vec<Vec<serde_json::Value>>,
     #[serde(rename = "displayMode")]
     display_mode: i8
 
@@ -18,7 +14,7 @@ struct Requirement {
 #[derive(Serialize, Deserialize)]
 struct Property {
     name: String,
-    values: Vec<Vec<Req>>,
+    values: Vec<Vec<serde_json::Value>>,
     #[serde(rename = "displayMode")]
     display_mode: i8
 }
@@ -49,23 +45,23 @@ struct Item {
     corrupted: bool,
     #[serde(rename = "lockedToCharacter")]
     locked_to_char: bool,
-    note: String,
-    properties: Vec<Property>,
-    requirements: Vec<Requirement>,
+    note: Option<String>,
+    properties: Option<Vec<Property>>,
+    requirements: Option<Vec<Requirement>>,
     #[serde(rename = "implicitMods")]
-    implicit_mods: Vec<String>,
+    implicit_mods: Option<Vec<String>>,
     #[serde(rename = "explicitMods")]
-    explicit_mods: Vec<String>,
+    explicit_mods: Option<Vec<String>>,
     #[serde(rename = "craftedMods")]
-    crafted_mods: Vec<String>,
+    crafted_mods: Option<Vec<String>>,
     #[serde(rename = "enchantedMods")]
-    enchanted_mods: Vec<String>,
+    enchanted_mods: Option<Vec<String>>,
     #[serde(rename = "descrText")]
-    descr_text: String,
+    descr_text: Option<String>,
     #[serde(rename = "frameType")]
     frame_type: i8, // 0 normal 1 magic 2 rare 3 unique 4 gems 5 currency 6 div cards 8 prophecies
-    x: i8,
-    y: i8,
+    x: Option<i8>,
+    y: Option<i8>,
     #[serde(rename = "socketedItems")]
     socketed_items: Vec<Item>
 
@@ -90,7 +86,15 @@ struct Stash {
 }
 #[derive(Serialize, Deserialize)]
 struct JsonSite {
-    next_id: String,
+    #[serde(skip_deserializing)]
+    next_change_id: String,
+    stashes: Vec<Stash>
+}
+
+#[derive(Serialize, Deserialize)]
+struct NextId {
+    next_change_id: String,
+
     stashes: Vec<Stash>
 }
 
