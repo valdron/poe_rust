@@ -1,6 +1,8 @@
 extern crate serde_json;
 extern crate hyper;
 
+include!(concat!(env!("OUT_DIR"), "/serde_types.rs"));
+
 use serde_json::de;
 use hyper::client::Client;
 use std::io::prelude::*;
