@@ -8,6 +8,7 @@ build = "build.rs"
 serde_codegen = ""
 
 [dependencies]
+regex = ""
 serde = ""
 serde_json = ""
 hyper = ""
