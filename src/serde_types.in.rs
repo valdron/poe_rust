@@ -86,7 +86,6 @@ struct Stash {
 }
 #[derive(Serialize, Deserialize)]
 struct JsonSite {
-    #[serde(skip_deserializing)]
     next_change_id: String,
     stashes: Vec<Stash>
 }
@@ -94,7 +93,6 @@ struct JsonSite {
 #[derive(Serialize, Deserialize)]
 struct NextId {
     next_change_id: String,
-
     stashes: Vec<Stash>
 }
 

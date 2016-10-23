@@ -18,16 +18,9 @@ fn main() {
     println!("client started");
     let mut res = client.get("http://api.pathofexile.com/public-stash-tabs").send().unwrap();
     println!("request done! ");
-    let mut str = String::new();
-    {
-        let refe = res.by_ref();
-        refe.take(45).read_to_string(&mut str);
-    }
-    println!("{}",str);
     let mut json: JsonSite = de::from_reader(res).unwrap();
     println!("deserialized");
     println!("next_id: {}",json.next_change_id);
-    let mut id = json.next_change_id;
 
    /* let mut get: String = String::new();
     loop {
