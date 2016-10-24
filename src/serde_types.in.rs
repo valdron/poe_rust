@@ -66,10 +66,12 @@ struct Item {
     socketed_items: Vec<Item>
 
 }
+
+
 #[derive(Serialize, Deserialize)]
 struct Stash {
     #[serde(rename = "accountName")]
-    acc_name: String,
+    acc_name: serde_json::Value,
     #[serde(rename = "lastCharacterName")]
     last_char_name: String,
     #[serde(rename = "id")]

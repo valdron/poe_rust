@@ -13,12 +13,34 @@ use hyper::client::Client;
 use std::io::prelude::{Read};
 use std::str::FromStr;
 use std::fmt::Write;
-use std::thread;
+use std::{time, thread};
 
 
 
 
 fn main() {
+
+
+    let mut dl = downloader::Downloader::new();
+    dl.start();
+
+    let mut str = String::new();
+    loop {
+        loop {
+            thread::sleep(time::Duration::from_millis(1000));
+            let s = dl.get_json_string();
+            match s {
+                Some(x) => {
+                    str = x;
+                    break
+                },
+                None => println!("waiting"),
+            }
+        }
+
+        let mut json: JsonSite = de::from_str(str.as_str()).unwrap();
+    }
+    /*
     let client = Client::new();
     println!("client started");
     let mut res = client.get("http://api.pathofexile.com/public-stash-tabs").send().unwrap();
@@ -39,6 +61,6 @@ fn main() {
     let mut json: JsonSite = de::from_slice(json_buff.as_slice()).unwrap();
     println!("deserialized");
     println!("next_id: {}", json.next_change_id);
-
+*/
 
 }
