@@ -4,7 +4,7 @@ extern crate regex;
 use regex::Regex;
 use std::thread::*;
 use hyper::client::{Response, Client};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::str;
 use std::io::prelude::*;
 
@@ -37,15 +37,15 @@ impl Downloader {
         let thread = spawn(move || {
             loop{
                 let url = thr_self.build_new_url(thr_self.next_id.as_str());
-                println!("new url:{}",url);
+                println!("Downloader --> new url:{}",url);
                 let res = thr_self.request(url.as_str());
-                println!("request done");
+                println!("Downloader --> request done");
                 let js_str = thr_self.read_to_str(res);
-                println!("read to string");
+                println!("Downloader --> read to string");
                 let _ = thr_self.get_next_id(&js_str);
-                println!("got next id:{}",thr_self.next_id);
+                println!("Downloader --> got next id:{}",thr_self.next_id);
                 thr_self.push_string_to_vec(js_str);
-                println!("pushed to vec");
+                println!("Downloader --> pushed to vec");
             }
 
         });
