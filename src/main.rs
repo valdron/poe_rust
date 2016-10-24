@@ -5,6 +5,8 @@ extern crate regex;
 
 include!(concat!(env!("OUT_DIR"), "/serde_types.rs"));
 
+
+mod downloader;
 use regex::Regex;
 use serde_json::de;
 use hyper::client::Client;
@@ -37,19 +39,6 @@ fn main() {
     let mut json: JsonSite = de::from_slice(json_buff.as_slice()).unwrap();
     println!("deserialized");
     println!("next_id: {}", json.next_change_id);
-    /*
-   let mut get: String = String::new();
-    loop {
-        get.truncate(0);
-        write!(&mut get,"http://api.pathofexile.com/public-stash-tabs?id={}",id);
-        println!("get {}",get.as_str());
-        res = client.get(get.as_str()).send().unwrap();
-        println!("request done! ");
-        json = de::from_reader(res).unwrap();
-        println!("deserialized");
-        println!("next_id: {}",json.next_change_id);
-        id = json.next_change_id;
-    }
-*/
+
 
 }
