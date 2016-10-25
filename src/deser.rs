@@ -19,12 +19,12 @@ impl JsonSiteDeser{
         }
     }
     //Start self -> spawns thread
-    pub fn start(&mut self) {
+    pub fn start(&mut self, prov: Provider) {
 
         //create Thread data
         let mut thr_struct = PoeDeser{
             json_sites: self.json_sites.clone(),
-            jp: Provider::new(),
+            jp: prov,
         };
         //spawn thread and start deserializerloop
         thread::spawn(move||{
@@ -48,16 +48,12 @@ impl JsonSiteDeser{
 struct PoeDeser{
     json_sites: Arc<Mutex<Vec<JsonSite>>>,
     //provides JsonStrings
-    jp: Provider,
+    jp:  Provider,
 }
 
 impl PoeDeser{
     //Thread main
     fn init(&mut self) {
-        print!("PoeDeser --> Starting Downloader");
-
-        self.jp.start();
-        println!("PoeDeser --> done");
 
         loop{
             match self.jp.get_json_string(){

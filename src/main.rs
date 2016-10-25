@@ -16,9 +16,10 @@ use std::time::Duration;
 
 fn main() {
 
-
+    let mut dw = downloader::Provider::new();
+    dw.start();
     let mut de = deser::JsonSiteDeser::new();
-    de.start();
+    de.start(dw);
     loop {
         thread::park_timeout(Duration::from_secs(10));
         println!("main --> Buffer_length: {}",de.get_buff_len());
