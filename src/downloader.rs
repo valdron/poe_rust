@@ -7,7 +7,6 @@ use hyper::client::{Response, Client};
 use std::sync::{Arc, Mutex, mpsc};
 use std::str;
 use std::io::prelude::*;
-use std::time::{Duration, Instant};
 
 
 pub struct Provider {
@@ -66,7 +65,7 @@ impl Downloader{
         self.msg_send = Some(send);
         self.msg_receive = Some(recv);
 
-        let mut c = Crawler{
+        let c = Crawler{
             responses: self.responses.clone(),
             client: Client::new(),
             msg_send_to_downloader: csend,
@@ -84,7 +83,7 @@ impl Downloader{
             //println!("Downloader --> got next id:{}",next_id);
             self.send_next_id(next_id);
             //println!("Downloader --> sent next id to crawler");
-            let now = Instant::now();
+            //let now = Instant::now();
             self.read_rest_to_str(res, &mut start_string);
             self.push_string_to_vec(start_string);
             //println!("Downloader --> read to stringand pushed in {},{}s", now.elapsed().as_secs(),now.elapsed().subsec_nanos());
@@ -115,7 +114,7 @@ impl Downloader{
     }
 
     fn send_next_id(&mut self,s: String) {
-        self.msg_send.as_mut().unwrap().send(s);
+        let _ = self.msg_send.as_mut().unwrap().send(s);
     }
 
     fn get_next_response(&mut self) -> Option<hyper::client::Response>{
@@ -137,7 +136,7 @@ impl Crawler{
         loop{
             let url = self.build_new_url();
             //println!("Crawler --> new url:{}",url);
-            let now = Instant::now();
+            //let now = Instant::now();
             let res = self.request(url.as_str());
             //println!("Crawler --> request done in {},{}s", now.elapsed().as_secs(),now.elapsed().subsec_nanos());
             self.push_response(res);

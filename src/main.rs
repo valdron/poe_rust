@@ -8,9 +8,8 @@ include!(concat!(env!("OUT_DIR"), "/serde_types.rs"));
 
 mod downloader;
 mod deser;
-use serde_json::de;
 use std::thread;
-use std::time::{Instant, Duration};
+use std::time::Duration;
 
 
 
