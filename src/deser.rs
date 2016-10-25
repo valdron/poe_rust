@@ -1,28 +1,32 @@
 use serde_json::de;
 use std::thread;
 use std::sync::{Arc, Mutex};
-use downloader::Downloader;
+use downloader::Provider;
 use JsonSite;
 use std::time::Duration;
 
 pub struct JsonSiteDeser {
+    //Shared Vector for deserialized data
     json_sites: Arc<Mutex<Vec<JsonSite>>>,
 
 }
 
 impl JsonSiteDeser{
+    // Create new Deserializer
     pub fn new() -> JsonSiteDeser {
         JsonSiteDeser{
             json_sites: Arc::new(Mutex::new(Vec::new())),
         }
     }
-
+    //Start self -> spawns thread
     pub fn start(&mut self) {
+
+        //create Thread data
         let mut thr_struct = PoeDeser{
             json_sites: self.json_sites.clone(),
-            dl: Downloader::new(),
+            jp: Provider::new(),
         };
-
+        //spawn thread and start deserializerloop
         thread::spawn(move||{
             thr_struct.init();
         });
@@ -40,21 +44,23 @@ impl JsonSiteDeser{
         (*guard).len()
     }
 }
-
+//Thread data
 struct PoeDeser{
     json_sites: Arc<Mutex<Vec<JsonSite>>>,
-    dl: Downloader,
+    //provides JsonStrings
+    jp: Provider,
 }
 
 impl PoeDeser{
+    //Thread main
     fn init(&mut self) {
         print!("PoeDeser --> Starting Downloader");
 
-        self.dl.start();
+        self.jp.start();
         println!("PoeDeser --> done");
 
         loop{
-            match self.dl.get_json_string(){
+            match self.jp.get_json_string(){
                 None => {
                     println!("PoeDeser --> parking for 5000ms");
                     thread::park_timeout(Duration::from_millis(5000));
@@ -68,11 +74,12 @@ impl PoeDeser{
 
         }
     }
+        // deserialize Json String to struct
     fn deserialize(&self, s: String) -> JsonSite {
         let site: JsonSite = de::from_str(s.as_str()).unwrap();
         site
     }
-
+        // write to shared vector
     fn write_to_vec(&mut self, site: JsonSite){
         let mut guard = self.json_sites.lock().unwrap();
         (*guard).push(site);
