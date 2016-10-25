@@ -92,9 +92,4 @@ pub struct JsonSite {
     stashes: Vec<Stash>
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct NextId {
-    next_change_id: String,
-    stashes: Vec<Stash>
-}
 

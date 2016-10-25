@@ -4,10 +4,12 @@ use std::sync::{Arc, Mutex};
 use downloader::Provider;
 use JsonSite;
 use std::time::Duration;
+use std::collections::VecDeque;
+
 
 pub struct JsonSiteDeser {
     //Shared Vector for deserialized data
-    json_sites: Arc<Mutex<Vec<JsonSite>>>,
+    json_sites: Arc<Mutex<VecDeque<JsonSite>>>,
 
 }
 
@@ -15,7 +17,7 @@ impl JsonSiteDeser{
     // Create new Deserializer
     pub fn new() -> JsonSiteDeser {
         JsonSiteDeser{
-            json_sites: Arc::new(Mutex::new(Vec::new())),
+            json_sites: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
     //Start self -> spawns thread
@@ -37,7 +39,7 @@ impl JsonSiteDeser{
 
     pub fn get_next_jsonsite(&mut self) -> Option<JsonSite> {
         let mut guard = self.json_sites.lock().unwrap();
-        (*guard).pop()
+        (*guard).pop_back()
     }
     pub fn get_buff_len(&mut self) -> usize{
         let guard = self.json_sites.lock().unwrap();
@@ -46,7 +48,7 @@ impl JsonSiteDeser{
 }
 //Thread data
 struct PoeDeser{
-    json_sites: Arc<Mutex<Vec<JsonSite>>>,
+    json_sites: Arc<Mutex<VecDeque<JsonSite>>>,
     //provides JsonStrings
     jp:  Provider,
 }
@@ -78,6 +80,6 @@ impl PoeDeser{
         // write to shared vector
     fn write_to_vec(&mut self, site: JsonSite){
         let mut guard = self.json_sites.lock().unwrap();
-        (*guard).push(site);
+        (*guard).push_front(site);
     }
 }

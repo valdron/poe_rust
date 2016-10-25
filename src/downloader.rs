@@ -7,24 +7,25 @@ use hyper::client::{Response, Client};
 use std::sync::{Arc, Mutex, mpsc};
 use std::str;
 use std::io::prelude::*;
+use std::collections::VecDeque;
 
 
 pub struct Provider {
-    json_strings: Arc<Mutex<Vec<String>>>,
+    json_strings: Arc<Mutex<VecDeque<String>>>,
 
 }
 
 impl Provider {
     pub fn new() -> Provider{
         Provider{
-            json_strings: Arc::new(Mutex::new(Vec::new()))
+            json_strings: Arc::new(Mutex::new(VecDeque::new()))
         }
     }
 
     pub fn start(&mut self) {
         let mut d = Downloader{
             json_strings: self.json_strings.clone(),
-            responses: Arc::new(Mutex::new(Vec::new())),
+            responses: Arc::new(Mutex::new(VecDeque::new())),
             msg_send: None,
             msg_receive: None,
             re: Regex::new("[0-9]*-[0-9]*-[0-9]*-[0-9]*-[0-9]*").unwrap(),
@@ -37,7 +38,7 @@ impl Provider {
 
     pub fn get_json_string(&mut self) -> Option<String> {
         let mut guard = self.json_strings.lock().unwrap();
-        (*guard).pop()
+        (*guard).pop_back()
     }
 
 
@@ -45,8 +46,8 @@ impl Provider {
 }
 
 struct Downloader{
-    json_strings:  Arc<Mutex<Vec<String>>>,
-    responses: Arc<Mutex<Vec<hyper::client::Response>>>,
+    json_strings:  Arc<Mutex<VecDeque<String>>>,
+    responses: Arc<Mutex<VecDeque<hyper::client::Response>>>,
     msg_send: Option<mpsc::Sender<String>>,
     msg_receive: Option<mpsc::Receiver<String>>,
     re: Regex,
@@ -99,7 +100,7 @@ impl Downloader{
 
     fn push_string_to_vec(&mut self, s: String) {
         let mut guard = self.json_strings.lock().unwrap();
-        (*guard).push(s);
+        (*guard).push_front(s);
     }
 
     fn get_start(&mut self, res: &mut hyper::client::Response) -> String {
@@ -119,12 +120,12 @@ impl Downloader{
 
     fn get_next_response(&mut self) -> Option<hyper::client::Response>{
         let mut guard = self.responses.lock().unwrap();
-        (*guard).pop()
+        (*guard).pop_back()
     }
 }
 
 struct Crawler{
-    responses: Arc<Mutex<Vec<hyper::client::Response>>>,
+    responses: Arc<Mutex<VecDeque<hyper::client::Response>>>,
     client: Client,
     msg_send_to_downloader: mpsc::Sender<String>,
     recv_from_downloader: mpsc::Receiver<String>,
@@ -167,6 +168,6 @@ impl Crawler{
 
     fn push_response(&mut self, res: hyper::client::Response) {
         let mut guard = self.responses.lock().unwrap();
-        (*guard).push(res);
+        (*guard).push_front(res);
     }
 }
