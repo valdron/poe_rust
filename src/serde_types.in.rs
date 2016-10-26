@@ -8,7 +8,7 @@ pub struct Requirement {
     name: String,
     values: Vec<Vec<serde_json::Value>>,
     #[serde(rename = "displayMode")]
-    display_mode: i8
+    display_mode: i16
 
 }
 #[derive(Serialize, Deserialize)]
@@ -16,11 +16,11 @@ pub struct Property {
     name: String,
     values: Vec<Vec<serde_json::Value>>,
     #[serde(rename = "displayMode")]
-    display_mode: i8
+    display_mode: i16
 }
 #[derive(Serialize, Deserialize)]
 pub struct Socket {
-    group: i8,
+    group: i16,
     #[serde(rename = "attr")]
     attribute: String,
 }
@@ -28,12 +28,13 @@ pub struct Socket {
 pub struct Item {
     verified: bool,
     #[serde(rename = "w")]
-    width: i8,
+    width: i16,
     #[serde(rename = "h")]
-    height: i8,
+    height: i16,
     #[serde(rename = "ilvl")]
-    item_level: i8,
+    item_level: i16,
     icon: String,
+    support: Option<bool>,
     league: String,
     #[serde(rename = "id")]
     item_id: String,
@@ -59,9 +60,9 @@ pub struct Item {
     #[serde(rename = "descrText")]
     descr_text: Option<String>,
     #[serde(rename = "frameType")]
-    frame_type: i8, // 0 normal 1 magic 2 rare 3 unique 4 gems 5 currency 6 div cards 8 prophecies
-    x: Option<i8>,
-    y: Option<i8>,
+    frame_type: i16, // 0 normal 1 magic 2 rare 3 unique 4 gems 5 currency 6 div cards 8 prophecies
+    x: Option<i16>,
+    y: Option<i16>,
     #[serde(rename = "socketedItems")]
     socketed_items: Vec<Item>
 

@@ -60,8 +60,8 @@ impl PoeDeser{
         loop{
             match self.jp.get_json_string(){
                 None => {
-                    println!("PoeDeser --> parking for 5000ms");
-                    thread::park_timeout(Duration::from_millis(5000));
+                    println!("PoeDeser --> parking for 1000ms");
+                    thread::park_timeout(Duration::from_millis(1000));
                 },
                 Some(x) => {
                     let site = self.deserialize(x);
