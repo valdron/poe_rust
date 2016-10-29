@@ -8,10 +8,13 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::str;
 use std::io::prelude::*;
 use std::collections::VecDeque;
+use std::time::{Instant, Duration};
+use time;
 
 
 pub struct Provider {
     json_strings: Arc<Mutex<VecDeque<String>>>,
+
 
 }
 
@@ -22,12 +25,13 @@ impl Provider {
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self, sender: mpsc::Sender<String>) {
         let mut d = Downloader{
             json_strings: self.json_strings.clone(),
             responses: Arc::new(Mutex::new(VecDeque::new())),
             msg_send: None,
             msg_receive: None,
+            send_to_deser: sender,
             re: Regex::new("[0-9]*-[0-9]*-[0-9]*-[0-9]*-[0-9]*").unwrap(),
         };
 
@@ -50,6 +54,7 @@ struct Downloader{
     responses: Arc<Mutex<VecDeque<hyper::client::Response>>>,
     msg_send: Option<mpsc::Sender<String>>,
     msg_receive: Option<mpsc::Receiver<String>>,
+    send_to_deser: mpsc::Sender<String>,
     re: Regex,
 }
 
@@ -84,10 +89,11 @@ impl Downloader{
             //println!("Downloader --> got next id:{}",next_id);
             self.send_next_id(next_id);
             //println!("Downloader --> sent next id to crawler");
-            //let now = Instant::now();
+            let now = Instant::now();
             self.read_rest_to_str(res, &mut start_string);
             self.push_string_to_vec(start_string);
-            //println!("Downloader --> read to stringand pushed in {},{}s", now.elapsed().as_secs(),now.elapsed().subsec_nanos());
+            let _ = self.send_to_deser.send(String::from("pushed"));
+            println!("{} Downloader --> read to string and pushed in {},{}s",time::at(time::get_time()).ctime(), now.elapsed().as_secs(),now.elapsed().subsec_nanos());
 
         }
 
@@ -137,9 +143,9 @@ impl Crawler{
         loop{
             let url = self.build_new_url();
             //println!("Crawler --> new url:{}",url);
-            //let now = Instant::now();
+            let now = Instant::now();
             let res = self.request(url.as_str());
-            //println!("Crawler --> request done in {},{}s", now.elapsed().as_secs(),now.elapsed().subsec_nanos());
+            println!("{} Crawler --> request done in {},{}s",time::at(time::get_time()).ctime(), now.elapsed().as_secs(),now.elapsed().subsec_nanos());
             self.push_response(res);
             //println!("Crawler --> pushed response");
             self.notify_downloader();

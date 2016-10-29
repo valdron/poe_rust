@@ -1,8 +1,11 @@
-use {JsonSite, Stash, Item, Property, Socket, Requirement};
+use serde_types::{JsonSite, Stash, Item, Property, Socket, Requirement};
 use deser;
 use regex::Regex;
 use serde_json::Value;
 use std::str::FromStr;
+use std::sync::{Mutex, Arc, mpsc};
+use std::time::{Duration, Instant};
+use time;
 
 #[derive(Debug)]
 pub struct RustStash {
@@ -10,7 +13,9 @@ pub struct RustStash {
     last_char_name: String,
     stash_id: String,
     stash_type: String,
-    is_public: bool
+    stash_name: String,
+    is_public: bool,
+    items: Vec<RustItem>
 }
 
 #[derive(Debug)]
@@ -21,9 +26,65 @@ enum PropValue {
 }
 
 #[derive(Debug)]
+pub enum ItemType {
+    Unknown,
+    DivCard,
+    Currency,
+    Prophecy,
+    Gem,
+    Jewel,
+    Flask,
+    Jewelry(JewelryType),
+    Armour(ArmourType),
+    Weapon(WeaponType),
+    Map,
+    MapPiece
+}
+
+
+#[derive(Debug)]
+enum JewelryType {
+    Amulet,
+    Belt,
+    Ring
+}
+
+#[derive(Debug)]
+enum WeaponType {
+    Unknown,
+    Axe1H,
+    Axe2H,
+    Mace1H,
+    Mace2H,
+    Sceptre,
+    Bow,
+    Dagger,
+    Claw,
+    Staff,
+    Sword1H,
+    Sword2H,
+    Rapier,
+    Wand
+}
+
+#[derive(Debug)]
+enum ArmourType {
+    Unknown,
+    Helm,
+    Body,
+    Boots,
+    Gloves,
+    Shield,
+    Quiver
+}
+
+
+
+#[derive(Debug)]
 pub struct RustItem {
     contained_in: String,
     item_id: String,
+  pub item_type: ItemType,
     league: String,
     note: String,
     verified: bool,
@@ -59,17 +120,101 @@ pub struct Parser {
     re: Vec<Regex>,
     re_for_text: Regex,
     re_for_props: Regex,
+    re_for_jewels: Regex,
+    re_for_flasks: Regex,
+    re_for_jewelry: Regex,
+    re_for_weapons: Regex,
+    re_for_armour: Regex,
+    re_for_map: Regex,
+    re_for_mappiece: Regex,
+    receive_from_deser: mpsc::Receiver<String>,
+    send_to_dbwriter: mpsc::Sender<String>,
+    deser: deser::JsonSiteDeser,
 }
 
 impl Parser {
-    pub fn new(v: Vec<Regex>, t: Regex, p: Regex) -> Parser {
+    pub fn new(send: mpsc::Sender<String>, recv: mpsc::Receiver<String>, des: deser::JsonSiteDeser) -> Parser {
+        let v = vec![Regex::new("^\\+?([0-9]+)%?.*").unwrap(),
+                     Regex::new(".*([0-9]+).*([0-9]+)?.*").unwrap(),
+                     Regex::new(".*").unwrap()];
         Parser {
+            deser: des,
+            receive_from_deser: recv,
+            send_to_dbwriter: send,
+            re_for_map: Regex::new("Map").unwrap(),
+            re_for_mappiece: Regex::new("(^Sacrifice)|(^Mortal)|('s Key)|(^Offering to the Goddess)|(^Fragment of the)").unwrap(),
+            re_for_armour: Regex::new("(Armour)|(Quiver)").unwrap(),
+            re_for_jewels: Regex::new("Jewel").unwrap(),
+            re_for_flasks: Regex::new("Flask").unwrap(),
+            re_for_jewelry: Regex::new("(Amulet(\\s|$))|(Ring(\\s|$))|(Belt(\\s|$))|(Sash(\\s|$))|(Talisman(\\s|$))").unwrap(),
+            re_for_weapons: Regex::new("Weapon").unwrap(),
             re: v,
-            re_for_text: t,
-            re_for_props: p,
+            re_for_text: Regex::new("[0-9]+").unwrap(),
+            re_for_props: Regex::new("([0-9.]+)(?:-([0-9]+))?").unwrap(),
         }
     }
+
+    pub fn start_parsing(&mut self){
+        loop {
+            let r = self.receive_from_deser.recv();
+            let s: Option<JsonSite> = self.deser.get_next_jsonsite();
+            match s {
+                Some(x) => {
+                    let now = Instant::now();
+                    for st in x.stashes {
+                        match self.parse_stash(st) {
+                            Ok(_) => {}
+                            Err(y) => {println!("{} ",y)}
+                        }
+                    }
+
+                    println!("{} Site {} parsed successfully {}.{}",time::at(time::get_time()).ctime(), x.next_change_id, now.elapsed().as_secs(),now.elapsed().subsec_nanos())
+                },
+                None => {}
+            }
+
+        }
+    }
+
+    fn parse_stash(&self, stash: Stash) -> Result<RustStash, &str> {
+
+        let acc = match stash.acc_name{
+            Value::String(s) => s,
+            _ => {String::new()}
+        };
+        let mut itm: Vec<RustItem> = Vec::new();
+        for i in stash.items{
+            match self.parse_item(i,&stash.stash_id) {
+                Ok(x) => itm.push(x),
+                Err(y) => {
+                    return Err(y)
+            }
+            }
+        }
+
+        Ok(RustStash{
+            stash_name: stash.stash_name,
+            items: itm,
+            acc_name: acc,
+            last_char_name: stash.last_char_name,
+            stash_id: stash.stash_id,
+            stash_type: stash.stash_type,
+            is_public: stash.is_public,
+        })
+
+    }
+
     pub fn parse_item(&self, item: Item, s_id: &String) -> Result<RustItem, &str> {
+
+
+        let item_type = match self.get_item_type(&item) {
+            Ok(x) => x,
+            Err(x) => {
+                println!("{} ",item.item_id);
+                return Err(x);
+            },
+        };
+
         let rx: i16;
         match item.x {
             Some(x) => rx = x,
@@ -108,9 +253,9 @@ impl Parser {
         };
         let properties: Vec<(String, PropValue)> = match self.parse_props(item.properties) {
             Ok(x) => x,
-            Err(y) => {
-                print!("Frametype: {}", item.frame_type);
-                return Err(y)
+            Err(x) => {
+                println!("{} ",item.item_id);
+                return Err(x);
             },
         };
         let enchanted_mods: Vec<(String, i16, i16)> = match self.parse_mods(item.enchanted_mods) {
@@ -120,6 +265,7 @@ impl Parser {
 
 
         Ok(RustItem {
+            item_type: item_type,
             contained_in: s_id.clone(),
             item_id: item.item_id,
             league: item.league,
@@ -150,6 +296,7 @@ impl Parser {
             socketed_items: socketed_items,
         })
     }
+
     fn parse_socket(&self, s: Vec<Socket>) -> (String, u8, u8) {
         match s.len() {
             0 => return ("".to_string(), 0, 0),
@@ -306,4 +453,182 @@ impl Parser {
         None => return Ok(Vec::new()),
     }
 }
+
+    pub fn get_item_type(&self, item: &Item) -> Result<ItemType, &str> {
+        match item.frame_type{
+            4 => {
+                return Ok(ItemType::Gem)
+            }
+            5 => {
+                return Ok(ItemType::Currency)
+            }
+            6 => {
+                return Ok(ItemType::DivCard)
+            }
+            8 => {
+                return Ok(ItemType::Prophecy)
+            }
+            _ => {}
+        }
+
+        match self.re_for_jewels.is_match(&item.base_item.as_str()) {
+            true => {return Ok(ItemType::Jewel)}
+            _ => {}
+        }
+        match self.re_for_flasks.is_match(&item.base_item.as_str()) {
+            true => {return Ok(ItemType::Flask)}
+            _ => {}
+        }
+        match self.re_for_jewelry.is_match(&item.base_item.as_str()){
+            true => {
+                match self.get_jewelry_type(&item.base_item) {
+                    Ok(x) => {return Ok(ItemType::Jewelry(x));}
+                    Err(e) => {return Err(e)}
+                }
+            }
+            _ => {}
+        }
+
+        match self.re_for_map.is_match(&item.base_item.as_str()){
+            true => {
+                return Ok(ItemType::Map);
+            }
+            _ => {}
+        }
+        match self.re_for_mappiece.is_match(&item.base_item.as_str()){
+            true => {
+                return Ok(ItemType::MapPiece);
+            }
+            _ => {}
+        }
+
+        match self.re_for_weapons.is_match(&item.icon) {
+            true => {
+                match self.get_weapon_type(&item.icon) {
+                    Ok(x) => {return Ok(ItemType::Weapon(x))}
+                    Err(e) => {return Err(e)}
+                }
+            }
+            _ => {}
+        }
+        match self.re_for_armour.is_match(&item.icon){
+            true => {
+                match self.get_armour_type(&item.icon) {
+                    Ok(x) => {return Ok(ItemType::Armour(x))}
+                    Err(e) => {return Err(e)}
+                }
+            }
+            _ => {}
+        }
+        Ok(ItemType::Unknown)
+
+
+    }
+
+    pub fn get_jewelry_type(&self, s: &String) -> Result<JewelryType, &str> {
+        lazy_static!{
+            static ref RING: Regex = Regex::new(".*Ring").unwrap();
+        }
+        lazy_static!{
+            static ref AMULET: Regex = Regex::new(".*(Amulet)|(Talisman)").unwrap();
+        }
+        lazy_static!{
+            static ref BELT: Regex = Regex::new(".*(Belt)|(Sash)").unwrap();
+        }
+        if RING.is_match(s.as_str()) {return Ok(JewelryType::Ring)}
+        if AMULET.is_match(s.as_str()) {return Ok(JewelryType::Amulet)}
+        if BELT.is_match(s.as_str()) {return Ok(JewelryType::Belt)}
+        Err("Amulet_type could not be determined")
+    }
+    pub fn get_weapon_type(&self, s: &String) -> Result<WeaponType, &str> {
+        lazy_static!{
+            static ref ONEH: Regex = Regex::new(".*OneHandWeapons.*").unwrap();
+        }
+        lazy_static!{
+                        static ref TWOH: Regex = Regex::new(".*TwoHandWeapons.*").unwrap();
+        }
+        lazy_static!{
+                        static ref AXE: Regex = Regex::new(".*Axe.*").unwrap();
+        }
+        lazy_static!{
+                        static ref SWORD: Regex = Regex::new(".*Sword.*").unwrap();
+        }
+        lazy_static!{
+                        static ref MACE: Regex = Regex::new(".*Mace.*").unwrap();
+        }
+       lazy_static!{
+                        static ref BOW: Regex = Regex::new(".*Bows.*").unwrap();
+        }
+        lazy_static!{
+                        static ref WAND: Regex = Regex::new(".*Wands.*").unwrap();
+        }
+        lazy_static!{
+                        static ref CLAW: Regex = Regex::new(".*Claws.*").unwrap();
+        }
+        lazy_static!{
+                        static ref STAFF: Regex = Regex::new(".*Staves.*").unwrap();
+        }
+        lazy_static!{
+                        static ref DAGGER: Regex = Regex::new(".*Daggers.*").unwrap();
+        }
+        lazy_static!{
+                        static ref SCEPTER: Regex = Regex::new(".*Scepter.*").unwrap();
+        }
+        lazy_static!{
+                        static ref RAPIER: Regex = Regex::new(".*Rapier.*").unwrap();
+        }
+
+
+        if ONEH.is_match(s.as_str()) {
+            if AXE.is_match(s.as_str()) {return Ok(WeaponType::Axe1H)}
+            if MACE.is_match(s.as_str()) {return Ok(WeaponType::Mace1H)}
+            if SWORD.is_match(s.as_str()) {return Ok(WeaponType::Sword1H)}
+            if CLAW.is_match(s.as_str()) {return Ok(WeaponType::Claw)}
+            if DAGGER.is_match(s.as_str()) {return Ok(WeaponType::Dagger)}
+            if WAND.is_match(s.as_str()) {return Ok(WeaponType::Wand)}
+            if SCEPTER.is_match(s.as_str()) {return Ok(WeaponType::Sceptre)}
+            if RAPIER.is_match(s.as_str()) {return Ok(WeaponType::Rapier)}
+
+
+        }
+
+        if TWOH.is_match(s.as_str()) {
+            if MACE.is_match(s.as_str()) {return Ok(WeaponType::Mace2H)}
+            if AXE.is_match(s.as_str()) {return Ok(WeaponType::Axe2H)}
+            if SWORD.is_match(s.as_str()) {return Ok(WeaponType::Sword2H)}
+            if STAFF.is_match(s.as_str()) {return Ok(WeaponType::Staff)}
+            if BOW.is_match(s.as_str()) {return Ok(WeaponType::Bow)}
+        }
+        Err("Weapontype not found")
+
+    }
+    pub fn get_armour_type(&self, s: &String) -> Result<ArmourType, &str> {
+        lazy_static!{
+            static ref BODY: Regex = Regex::new(".*BodyArmours.*").unwrap();
+        }
+        lazy_static!{
+            static ref HELM: Regex = Regex::new(".*Helmets.*").unwrap();
+        }
+        lazy_static!{
+            static ref SHIELD: Regex = Regex::new(".*Shields.*").unwrap();
+        }
+        lazy_static!{
+            static ref GLOVES: Regex = Regex::new(".*Gloves.*").unwrap();
+        }
+        lazy_static!{
+            static ref BOOTS: Regex = Regex::new(".*Boots.*").unwrap();
+        }
+        lazy_static!{
+            static ref QUIVER: Regex = Regex::new(".*Quiver.*").unwrap();
+        }
+
+        if BODY.is_match(s.as_str()) {return Ok(ArmourType::Body)}
+        if HELM.is_match(s.as_str()) {return Ok(ArmourType::Helm)}
+        if SHIELD.is_match(s.as_str()) {return Ok(ArmourType::Shield)}
+        if GLOVES.is_match(s.as_str()) {return Ok(ArmourType::Gloves)}
+        if BOOTS.is_match(s.as_str()) {return Ok(ArmourType::Boots)}
+        if QUIVER.is_match(s.as_str()) {return Ok(ArmourType::Quiver)}
+        Err("Armour Type not found")
+
+    }
 }

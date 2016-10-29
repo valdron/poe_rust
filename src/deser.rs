@@ -1,9 +1,10 @@
 use serde_json::de;
 use std::thread;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use downloader::Provider;
-use JsonSite;
-use std::time::Duration;
+use serde_types::JsonSite;
+use std::time::{Duration,Instant};
+use time;
 use std::collections::VecDeque;
 
 
@@ -21,10 +22,12 @@ impl JsonSiteDeser{
         }
     }
     //Start self -> spawns thread
-    pub fn start(&mut self, prov: Provider) {
+    pub fn start(&mut self, prov: Provider, recv: mpsc::Receiver<String>, send: mpsc::Sender<String>) {
 
         //create Thread data
         let mut thr_struct = PoeDeser{
+            notify_parser: send,
+            receive_from: recv,
             json_sites: self.json_sites.clone(),
             jp: prov,
         };
@@ -49,6 +52,8 @@ impl JsonSiteDeser{
 //Thread data
 struct PoeDeser{
     json_sites: Arc<Mutex<VecDeque<JsonSite>>>,
+    receive_from: mpsc::Receiver<String>,
+    notify_parser: mpsc::Sender<String>,
     //provides JsonStrings
     jp:  Provider,
 }
@@ -58,15 +63,16 @@ impl PoeDeser{
     fn init(&mut self) {
 
         loop{
+            let m = self.receive_from.recv();
             match self.jp.get_json_string(){
                 None => {
-                    println!("PoeDeser --> parking for 1000ms");
-                    thread::park_timeout(Duration::from_millis(1000));
                 },
                 Some(x) => {
+                    let now = Instant::now();
                     let site = self.deserialize(x);
                     self.write_to_vec(site);
-                    println!("PoeDeser --> deserialized and pushed")
+                    println!("{} PoeDeser --> deserialized and pushed in {}.{}", time::at(time::get_time()).ctime(),now.elapsed().as_secs(),now.elapsed().subsec_nanos());
+                    let _ = self.notify_parser.send(String::from("pushed"));
                 }
             }
 

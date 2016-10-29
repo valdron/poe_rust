@@ -2,13 +2,12 @@
 name = "net"
 version = "0.1.0"
 authors = ["Paul <seehofer.paul@gmail.com>"]
-build = "build.rs"
-
-[build-dependencies]
-serde_codegen = ""
 
 [dependencies]
 regex = ""
 serde = ""
 serde_json = ""
+serde_derive = ""
 hyper = ""
+lazy_static = ""
+time = ""
