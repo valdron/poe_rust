@@ -4,6 +4,7 @@ use regex::Regex;
 use serde_json::Value;
 use std::str::FromStr;
 
+#[derive(Debug)]
 pub struct RustStash {
     acc_name: String,
     last_char_name: String,
@@ -12,8 +13,14 @@ pub struct RustStash {
     is_public: bool
 }
 
+#[derive(Debug)]
+enum PropValue {
+    UnqJewels(String),
+    Normal(Vec<(f32, f32)>),
+    Nothing
+}
 
-
+#[derive(Debug)]
 pub struct RustItem {
     contained_in: String,
     item_id: String,
@@ -22,7 +29,7 @@ pub struct RustItem {
     verified: bool,
     identified: bool,
     corrupted: bool,
-    locked_to_char:bool,
+    locked_to_char: bool,
     width: i16,
     height: i16,
     item_level: i16,
@@ -35,7 +42,7 @@ pub struct RustItem {
     name: String,
     base_item: String,
     // only parse relevant Name and value
-    properties: Vec<(String, Vec<(f32, f32)>)>,
+    properties: Vec<(String, PropValue)>,
     // only parse relevant Name and value
     requirements: Vec<(String, i16)>,
     implicit_mods: Vec<(String, i16, i16)>,
@@ -52,13 +59,11 @@ pub struct Parser {
     re: Vec<Regex>,
     re_for_text: Regex,
     re_for_props: Regex,
-
 }
 
 impl Parser {
-
-    pub fn new(v: Vec<Regex>, t: Regex, p: Regex) -> Parser{
-        Parser{
+    pub fn new(v: Vec<Regex>, t: Regex, p: Regex) -> Parser {
+        Parser {
             re: v,
             re_for_text: t,
             re_for_props: p,
@@ -89,33 +94,32 @@ impl Parser {
             Err(y) => return Err(y),
         };
 
-        let implicit_mods: Vec<(String, i16, i16)> = match self.parse_mods(item.implicit_mods){
+        let implicit_mods: Vec<(String, i16, i16)> = match self.parse_mods(item.implicit_mods) {
             Ok(x) => x,
             Err(y) => return Err(y),
         };
-        let explicit_mods: Vec<(String, i16, i16)> = match self.parse_mods(item.explicit_mods){
+        let explicit_mods: Vec<(String, i16, i16)> = match self.parse_mods(item.explicit_mods) {
             Ok(x) => x,
             Err(y) => return Err(y),
         };
-        let crafted_mods: Vec<(String, i16, i16)>  = match self.parse_mods(item.crafted_mods){
+        let crafted_mods: Vec<(String, i16, i16)> = match self.parse_mods(item.crafted_mods) {
             Ok(x) => x,
             Err(y) => return Err(y),
         };
-        let properties: Vec<(String, Vec<(f32, f32)>)> = match self.parse_props(item.properties){
+        let properties: Vec<(String, PropValue)> = match self.parse_props(item.properties) {
             Ok(x) => x,
             Err(y) => {
                 print!("Frametype: {}", item.frame_type);
                 return Err(y)
             },
         };
-        let enchanted_mods: Vec<(String, i16, i16)> = match self.parse_mods(item.enchanted_mods){
+        let enchanted_mods: Vec<(String, i16, i16)> = match self.parse_mods(item.enchanted_mods) {
             Ok(x) => x,
             Err(y) => return Err(y),
         };
 
 
-
-        Ok(RustItem{
+        Ok(RustItem {
             contained_in: s_id.clone(),
             item_id: item.item_id,
             league: item.league,
@@ -201,7 +205,7 @@ impl Parser {
                         match r.is_match(m.as_str()) {
                             true => {
                                 let cap = r.captures(m.as_str()).unwrap();
-                                let text = self.re_for_text.replace(cap.at(0).unwrap(), "##");
+                                let text = self.re_for_text.replace_all(cap.at(0).unwrap(), "##");
                                 let val1 = match cap.at(1) {
                                     Some(x) => i16::from_str_radix(x, 10).unwrap(),
                                     None => 0
@@ -216,7 +220,7 @@ impl Parser {
                             false => continue,
                         }
                     }
-                    println!("{}",m);
+                    println!("{}", m);
                     return Err("could not parse this mod")
                 }
                 Ok(result)
@@ -225,47 +229,81 @@ impl Parser {
         }
     }
 
-    fn parse_props(&self, props: Option<Vec<Property>>) -> Result<Vec<(String, Vec<(f32, f32)>)>, &str> {
+    fn parse_props(&self, props: Option<Vec<Property>>) -> Result<Vec<(String, PropValue)>, &str> {
         match props {
             Some(x) => {
-                let mut result: Vec<(String, Vec<(f32, f32)>)> = Vec::new();
+                let mut result: Vec<(String, PropValue)> = Vec::new();
                 for p in x {
-                    let name = p.name.clone();
-                    let mut vec: Vec<(f32, f32)> = Vec::new();
-                    for v in  p.values {
-                        let mut val1: f32;
-                        let mut val2: f32;
-                            let caps = match v[0] {
-                                Value::String(ref s) => {
-                                    self.re_for_props.captures(s.as_str())
+                    match p.name.is_empty() {
+                        true => {
+                            let name = match p.values[0][0] {
+                                Value::String(ref s) => s.clone(),
+                                _ => {
+                                    println!("{} ", p.name);
+                                    return Err("weird layout check mod");
                                 }
-                                _ => return Err("none string value in property")
                             };
-                            match caps {
-                                Some(x) => {
-                                    val1 = f32::from_str(x.at(1).unwrap_or("0.0")).unwrap();
-                                    val2 = f32::from_str(x.at(2).unwrap_or("0.0")).unwrap();
-                                },
+                            result.push((name, PropValue::Nothing));
+                            break;
+                        },
+                        _ => {},
+                    }
+                    let mut val = PropValue::Nothing;
+                    let name = p.name.clone();
 
-                                None => {
-                                    let s = match v[0]{
-                                        Value::String(ref s) => s.clone(),
-                                        _ => String::new()
-                                    };
-                                    println!("{}",s);
-                                    return Err("no match in property")
-                                },
+                    for v in p.values {
+                        match val {
+                            PropValue::Nothing => {
+                                let caps: Option<super::regex::Captures> = match v[0] {
+                                    Value::String(ref s) => {
+                                        self.re_for_props.captures(s.as_str())
+                                    }
+                                    _ => return Err("none string value in property")
+                                };
+                                match caps {
+                                    Some(x) => {
+                                        let val1 = f32::from_str(x.at(1).unwrap_or("0.0")).unwrap();
+                                        let val2 = f32::from_str(x.at(2).unwrap_or("0.0")).unwrap();
+                                        val = PropValue::Normal(vec![(val1, val2)]);
+                                    },
+
+                                    None => {
+                                        let s = match v[0] {
+                                            Value::String(ref s) => s.clone(),
+                                            _ => { return Err("very weird check mod"); }
+                                        };
+                                        val = PropValue::UnqJewels(s)
+                                    },
+                                }
+                            },
+                            PropValue::Normal(ref mut n) => {
+                                let caps: Option<super::regex::Captures> = match v[0] {
+                                    Value::String(ref s) => {
+                                        self.re_for_props.captures(s.as_str())
+                                    }
+                                    _ => return Err("none string value in property")
+                                };
+                                match caps {
+                                    Some(x) => {
+                                        let val1 = f32::from_str(x.at(1).unwrap_or("0.0")).unwrap();
+                                        let val2 = f32::from_str(x.at(2).unwrap_or("0.0")).unwrap();
+                                        n.push((val1, val2))
+
+                                    },
+
+                                    None => {
+                                        return Err("expected another normal Porperty")
+                                    },
+                                }
                             }
-
-                        vec.push((val1, val2));
+                            PropValue::UnqJewels(s) => { return Err("there should be no other value in this property :/") }
                         }
-                    result.push((name, vec))
-                }
-                Ok(result)
-            },
-            None => return Ok(Vec::new()),
-
-        }
-
+                    }
+                result.push((name, val))
+            }
+            Ok(result)
+        },
+        None => return Ok(Vec::new()),
     }
+}
 }

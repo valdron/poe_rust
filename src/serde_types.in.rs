@@ -3,7 +3,7 @@
 
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Requirement {
     name: String,
     values: Vec<Vec<serde_json::Value>>,
@@ -11,20 +11,20 @@ pub struct Requirement {
     display_mode: i16
 
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Property {
     name: String,
     values: Vec<Vec<serde_json::Value>>,
     #[serde(rename = "displayMode")]
     display_mode: i16
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Socket {
     group: i16,
     #[serde(rename = "attr")]
     attribute: String,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Item {
     verified: bool,
     #[serde(rename = "w")]
@@ -69,7 +69,7 @@ pub struct Item {
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Stash {
     #[serde(rename = "accountName")]
     acc_name: serde_json::Value,
@@ -87,7 +87,7 @@ pub struct Stash {
 
 
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct JsonSite {
     next_change_id: String,
     stashes: Vec<Stash>

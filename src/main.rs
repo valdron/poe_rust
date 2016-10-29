@@ -24,7 +24,7 @@ fn main() {
     let mut de = deser::JsonSiteDeser::new();
     de.start(dw);
     let reg = vec![Regex::new("^\\+?([0-9]{1,3})?%?.*").unwrap()];
-    let par = parser::Parser::new( reg, Regex::new("[0-9]").unwrap(),Regex::new("([0-9]+)[.-]?([0-9]+)?").unwrap());
+    let par = parser::Parser::new( reg, Regex::new("[0-9]+").unwrap(),Regex::new("([0-9]+)[.-]?([0-9]+)?").unwrap());
     let mut sinum = 0;
     loop {
         thread::park_timeout(Duration::from_secs(1));
@@ -36,12 +36,17 @@ fn main() {
             let now = Instant::now();
             let s = de.get_next_jsonsite().unwrap();
             let mut snum = 0;
+            let mut errors: usize = 0;
             for stash in s.stashes {
                 let mut inum = 0;
                 for item in stash.items {
                     match par.parse_item(item, &stash.stash_id) {
-                        Ok(_) => {},//println!("item parsed succesfully Itemnumber: {} Stashnumber: {} Sitenumber: {}", inum,snum,sinum),
-                        Err(x) => println!("Error: {} Itemnumber: {} Stashnumber: {} Sitenumber: {}", x, inum, snum,sinum),
+                        Ok(x) => {                    println!("{:?}",x);
+                        },//println!("item parsed succesfully Itemnumber: {} Stashnumber: {} Sitenumber: {}", inum,snum,sinum),
+                        Err(x) => {
+                            println!("Error: {} Itemnumber: {} Stashnumber: {} Sitenumber: {}", x, inum, snum,sinum);
+                            errors += 1;
+                        },
                     }
                     inum += 1;
                 }
