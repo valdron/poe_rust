@@ -15,6 +15,7 @@ pub struct RustStash {
     stash_type: String,
     stash_name: String,
     is_public: bool,
+    item_nr: usize,
     items: Vec<RustItem>
 }
 
@@ -86,6 +87,7 @@ pub struct RustItem {
     item_id: String,
   pub item_type: ItemType,
     league: String,
+    price: Option<(String, String, f32)>,
     note: String,
     verified: bool,
     identified: bool,
@@ -94,7 +96,6 @@ pub struct RustItem {
     width: i16,
     height: i16,
     item_level: i16,
-    icon: String,
     support: Option<bool>,
     // Save as Color links with - nonlinks with |
     sockets: String,
@@ -127,6 +128,7 @@ pub struct Parser {
     re_for_armour: Regex,
     re_for_map: Regex,
     re_for_mappiece: Regex,
+    re_for_price: Regex,
     receive_from_deser: mpsc::Receiver<String>,
     send_to_dbwriter: mpsc::Sender<String>,
     deser: deser::JsonSiteDeser,
@@ -138,6 +140,7 @@ impl Parser {
                      Regex::new(".*([0-9]+).*([0-9]+)?.*").unwrap(),
                      Regex::new(".*").unwrap()];
         Parser {
+            re_for_price: Regex::new("^~([a-z/]+)\\s([0-9\\.]+)\\s([a-z]{3,})$").unwrap(),
             deser: des,
             receive_from_deser: recv,
             send_to_dbwriter: send,
@@ -168,7 +171,7 @@ impl Parser {
                         }
                     }
 
-                    println!("{} Site {} parsed successfully {}.{}",time::at(time::get_time()).ctime(), x.next_change_id, now.elapsed().as_secs(),now.elapsed().subsec_nanos())
+                    println!("{} | Parser\t\t\t--> Site {} parsed successfully {}.{}",time::at(time::get_time()).ctime(), x.next_change_id, now.elapsed().as_secs(),now.elapsed().subsec_nanos())
                 },
                 None => {}
             }
@@ -182,9 +185,17 @@ impl Parser {
             Value::String(s) => s,
             _ => {String::new()}
         };
+        let s_name = match stash.stash_name{
+            Some(x) => x,
+            None => String::new(),
+        };
         let mut itm: Vec<RustItem> = Vec::new();
+        let price: Option<(String, String, f32)> = match self.parse_price(&s_name) {
+            Ok(x) => Some(x),
+            Err(y) => None,
+        };
         for i in stash.items{
-            match self.parse_item(i,&stash.stash_id) {
+            match self.parse_item(i,&stash.stash_id,&price) {
                 Ok(x) => itm.push(x),
                 Err(y) => {
                     return Err(y)
@@ -193,7 +204,8 @@ impl Parser {
         }
 
         Ok(RustStash{
-            stash_name: stash.stash_name,
+            item_nr: itm.len(),
+            stash_name: s_name,
             items: itm,
             acc_name: acc,
             last_char_name: stash.last_char_name,
@@ -203,8 +215,14 @@ impl Parser {
         })
 
     }
+    pub fn parse_price(&self,s: &String) -> Result<(String, String, f32), &str>{
+        match self.re_for_price.captures(s.as_str()){
+            Some(c) => Ok((String::from(c.at(1).unwrap()),String::from(c.at(3).unwrap()),f32::from_str(c.at(2).unwrap()).unwrap())),
+            None => Err("no price")
+        }
+    }
 
-    pub fn parse_item(&self, item: Item, s_id: &String) -> Result<RustItem, &str> {
+    pub fn parse_item(&self, item: Item, s_id: &String, s_price: &Option<(String, String, f32)>) -> Result<RustItem, &str> {
 
 
         let item_type = match self.get_item_type(&item) {
@@ -221,6 +239,18 @@ impl Parser {
             None => return Err("could not parse: no Coords")
         }
         let ry: i16 = item.y.unwrap();
+
+        let price: Option<(String, String, f32)> = match s_price{
+            &Some((ref s1, ref s2,f))  => Some((s1.clone(),s2.clone(),f)),
+            &None => match item.note{
+                Some(ref y) => match self.parse_price(y) {
+                    Ok(z) => Some(z),
+                    Err(_) => None,
+                },
+                None => None,
+            }
+
+        };
 
         let note: String = match item.note {
             Some(s) => s,
@@ -265,6 +295,7 @@ impl Parser {
 
 
         Ok(RustItem {
+            price: price,
             item_type: item_type,
             contained_in: s_id.clone(),
             item_id: item.item_id,
@@ -277,7 +308,6 @@ impl Parser {
             width: item.width,
             height: item.height,
             item_level: item.item_level,
-            icon: item.icon,
             support: item.support,
             sockets: sockets,
             socket_nr: socket_nr,

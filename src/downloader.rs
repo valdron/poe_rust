@@ -25,7 +25,7 @@ impl Provider {
         }
     }
 
-    pub fn start(&mut self, sender: mpsc::Sender<String>) {
+    pub fn start(&mut self, sender: mpsc::Sender<String>, start_id: String) {
         let mut d = Downloader{
             json_strings: self.json_strings.clone(),
             responses: Arc::new(Mutex::new(VecDeque::new())),
@@ -36,7 +36,7 @@ impl Provider {
         };
 
         let _ = spawn(move || {
-            d.init();
+            d.init(start_id);
         });
     }
 
@@ -65,7 +65,7 @@ impl Downloader{
             c.init();
         });
     }
-    fn init(&mut self){
+    fn init(&mut self, start_id: String){
         let (send, crecv) = mpsc::channel();
         let (csend, recv) = mpsc::channel();
         self.msg_send = Some(send);
@@ -76,13 +76,13 @@ impl Downloader{
             client: Client::new(),
             msg_send_to_downloader: csend,
             recv_from_downloader: crecv,
-            next_id: String::new(),
+            next_id: start_id,
         };
         self.start_crawler(c);
         loop{
             let _ = self.msg_receive.as_mut().unwrap().recv();
             //println!("Downloader --> got msg from Crawler");
-            let mut res = self.get_next_response().unwrap();
+            let mut res: hyper::client::Response = self.get_next_response().unwrap();
             //println!("Downloader --> got next response");
             let mut start_string: String = self.get_start(&mut res);
             let next_id = self.get_next_id(&start_string);
@@ -93,7 +93,7 @@ impl Downloader{
             self.read_rest_to_str(res, &mut start_string);
             self.push_string_to_vec(start_string);
             let _ = self.send_to_deser.send(String::from("pushed"));
-            println!("{} Downloader --> read to string and pushed in {},{}s",time::at(time::get_time()).ctime(), now.elapsed().as_secs(),now.elapsed().subsec_nanos());
+            println!("{} | Downloader\t\t--> read to string and pushed in {},{}s",time::at(time::get_time()).ctime(), now.elapsed().as_secs(),now.elapsed().subsec_nanos());
 
         }
 
@@ -140,25 +140,49 @@ struct Crawler{
 
 impl Crawler{
     fn init(&mut self){
+        let mintime = Duration::from_secs(1);
+        let zerodur = Duration::from_secs(0);
         loop{
             let url = self.build_new_url();
             //println!("Crawler --> new url:{}",url);
             let now = Instant::now();
             let res = self.request(url.as_str());
-            println!("{} Crawler --> request done in {},{}s",time::at(time::get_time()).ctime(), now.elapsed().as_secs(),now.elapsed().subsec_nanos());
+            println!("{} | Crawler\t\t\t--> request done in {}.{}s",time::at(time::get_time()).ctime(), now.elapsed().as_secs(),now.elapsed().subsec_nanos());
             self.push_response(res);
             //println!("Crawler --> pushed response");
             self.notify_downloader();
             //println!("Crawler --> notified Downloader");
-
+            let elapsed: Duration = now.elapsed();
+            if mintime > elapsed {
+                let dur: Duration = mintime-elapsed;
+                println!("{} | Crawler\t\t\t--> am to fast parking for {}.{}",time::at(time::get_time()).ctime(),dur.as_secs(),dur.subsec_nanos());
+                park_timeout(dur);
+            }
             self.next_id = self.recv_from_downloader.recv().unwrap();
             //println!("Crawler --> received new next id");
 
         }
     }
 
-    fn request(&self, url: &str) -> hyper::client::Response {
-        self.client.get(url).send().unwrap()
+    fn request(&mut self, url: &str) -> hyper::client::Response {
+        match self.client.get(url).send() {
+            Ok(x) => {
+                return x;
+            }
+
+            _ => {
+                loop {
+                    println!("{} | Crawler\t\t\t--> connection closed, trying to reopen", time::at(time::get_time()).ctime());
+                    self.client = Client::new();
+                    match self.client.get(url).send() {
+                        Ok(x) => {
+                            return x;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
     }
 
     fn build_new_url(&self) -> String{

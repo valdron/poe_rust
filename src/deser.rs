@@ -35,7 +35,7 @@ impl JsonSiteDeser{
         thread::spawn(move||{
             thr_struct.init();
         });
-        println!("JsonSiteDeser --> deser thread started");
+        println!("{} | JsonSiteDeser\t--> deser thread started",time::at(time::get_time()).ctime());
 
 
     }
@@ -71,7 +71,7 @@ impl PoeDeser{
                     let now = Instant::now();
                     let site = self.deserialize(x);
                     self.write_to_vec(site);
-                    println!("{} PoeDeser --> deserialized and pushed in {}.{}", time::at(time::get_time()).ctime(),now.elapsed().as_secs(),now.elapsed().subsec_nanos());
+                    println!("{} | PoeDeser\t\t\t--> deserialized and pushed in {}.{}", time::at(time::get_time()).ctime(),now.elapsed().as_secs(),now.elapsed().subsec_nanos());
                     let _ = self.notify_parser.send(String::from("pushed"));
                 }
             }
