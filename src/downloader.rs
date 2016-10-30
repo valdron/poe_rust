@@ -176,6 +176,7 @@ impl Crawler{
                     self.client = Client::new();
                     match self.client.get(url).send() {
                         Ok(x) => {
+                            println!("{} | Crawler\t\t\t--> reopening successful", time::at(time::get_time()).ctime());
                             return x;
                         }
                         _ => {}
