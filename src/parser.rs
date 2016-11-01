@@ -129,19 +129,19 @@ pub struct Parser {
     re_for_map: Regex,
     re_for_mappiece: Regex,
     re_for_price: Regex,
-    receive_from_deser: mpsc::Receiver<String>,
+    receive_from_deser: mpsc::Receiver<JsonSite>,
     send_to_dbwriter: mpsc::Sender<String>,
-    deser: deser::JsonSiteDeser,
+    to_logger: mpsc::Sender<String>
 }
 
 impl Parser {
-    pub fn new(send: mpsc::Sender<String>, recv: mpsc::Receiver<String>, des: deser::JsonSiteDeser) -> Parser {
+    pub fn new(send: mpsc::Sender<String>, recv: mpsc::Receiver<JsonSite>, to_logger: mpsc::Sender<String>) -> Parser {
         let v = vec![Regex::new("^\\+?([0-9]+)%?.*").unwrap(),
                      Regex::new(".*([0-9]+).*([0-9]+)?.*").unwrap(),
                      Regex::new(".*").unwrap()];
         Parser {
+            to_logger: to_logger,
             re_for_price: Regex::new("^~([a-z/]+)\\s([0-9\\.]+)\\s([a-z]{3,})$").unwrap(),
-            deser: des,
             receive_from_deser: recv,
             send_to_dbwriter: send,
             re_for_map: Regex::new("Map").unwrap(),
@@ -159,21 +159,29 @@ impl Parser {
 
     pub fn start_parsing(&mut self){
         loop {
-            let r = self.receive_from_deser.recv();
-            let s: Option<JsonSite> = self.deser.get_next_jsonsite();
-            match s {
-                Some(x) => {
+            let site = self.receive_from_deser.recv();
+            match site {
+                Ok(x) => {
                     let now = Instant::now();
                     for st in x.stashes {
                         match self.parse_stash(st) {
                             Ok(_) => {}
-                            Err(y) => {println!("{} ",y)}
+                            Err(y) => {self.to_logger.send(format!("{} ",y));}
                         }
                     }
 
-                    println!("{} | Parser\t\t\t--> Site {} parsed successfully {}.{}",time::at(time::get_time()).ctime(), x.next_change_id, now.elapsed().as_secs(),now.elapsed().subsec_nanos())
+                    self.to_logger.send(format!("{} | Parser\t\t\t--> Site {} parsed successfully {}.{}",
+                                                time::at(time::get_time()).ctime(),
+                                                x.next_change_id,
+                                                now.elapsed().as_secs(),
+                                                now.elapsed().subsec_nanos()));
                 },
-                None => {}
+                Err(e) => {
+                    self.to_logger.send(format!("{} | Parser\t\t\t--> Error receiving next site: {:?}",
+                                                time::at(time::get_time()).ctime(),
+                                                e));
+
+                }
             }
 
         }
@@ -586,7 +594,7 @@ impl Parser {
         lazy_static!{
                         static ref MACE: Regex = Regex::new(".*Mace.*").unwrap();
         }
-       lazy_static!{
+        lazy_static!{
                         static ref BOW: Regex = Regex::new(".*Bows.*").unwrap();
         }
         lazy_static!{
