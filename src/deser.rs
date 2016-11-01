@@ -1,10 +1,8 @@
 use serde_json;
-use std::thread;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::mpsc;
 use serde_types::JsonSite;
-use std::time::{Duration,Instant};
+use std::time::Instant;
 use time;
-use std::collections::VecDeque;
 
 //Thread data
 pub struct PoeDeser{
@@ -28,20 +26,20 @@ impl PoeDeser{
         loop{
             let m = self.receive_from.recv();
             match m{
-                Err(e) => { self.logging.send(format!("{} | PoeDeser\t\t\t--> Err : {:?}", time::at(time::get_time()).ctime(),e));
+                Err(e) => { let _= self.logging.send(format!("{} | PoeDeser\t\t\t--> Err : {:?}", time::at(time::get_time()).ctime(),e));
                 },
                 Ok(x) => {
                     let now = Instant::now();
                     let site = self.deserialize(x);
                     match site {
                         Ok(x) => {
-                            self.notify_parser.send(x);
-                            self.logging.send(format!("{} | PoeDeser\t\t\t--> deserialized and sent in {}.{}",
+                            let _= self.notify_parser.send(x);
+                            let _= self.logging.send(format!("{} | PoeDeser\t\t\t--> deserialized and sent in {}.{}",
                                                       time::at(time::get_time()).ctime(), now.elapsed().as_secs(),
                                                       now.elapsed().subsec_nanos()));
                         }
                         Err(e) => {
-                            self.logging.send(format!("{} | PoeDeser\t\t\t--> Err : {:?}", time::at(time::get_time()).ctime(),e));
+                            let _= self.logging.send(format!("{} | PoeDeser\t\t\t--> Err : {:?}", time::at(time::get_time()).ctime(),e));
                         }
                 }
                 }

@@ -19,8 +19,6 @@ mod parser;
 mod deser;
 use logger::Logger;
 use std::sync::mpsc;
-use std::time::{Instant, Duration};
-use regex::Regex;
 use std::thread;
 
 

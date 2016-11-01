@@ -4,10 +4,9 @@ extern crate regex;
 use regex::Regex;
 use std::thread::*;
 use hyper::client::{Response, Client};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::mpsc;
 use std::str;
 use std::io::prelude::*;
-use std::collections::VecDeque;
 use std::time::{Instant, Duration};
 use time;
 
@@ -63,7 +62,7 @@ impl Downloader{
             let now = Instant::now();
             self.read_rest_to_str(res, &mut start_string);
             let _ = self.send_to_deser.send(start_string);
-            self.logging.send(format!("{} | Downloader\t\t--> read to string and pushed in {},{}s",
+            let _ = self.logging.send(format!("{} | Downloader\t\t--> read to string and pushed in {},{}s",
                                       time::at(time::get_time()).ctime(),
                                       now.elapsed().as_secs(),
                                       now.elapsed().subsec_nanos()));
@@ -104,22 +103,21 @@ struct Crawler{
 impl Crawler{
     fn init(&mut self){
         let mintime = Duration::from_secs(1);
-        let zerodur = Duration::from_secs(0);
         loop{
             let url = self.build_new_url();
             let now = Instant::now();
             let res = self.request(url.as_str());
 
-            self.logging.send(format!("{} | Crawler\t\t\t--> request done in {}.{}s",
+            let _= self.logging.send(format!("{} | Crawler\t\t\t--> request done in {}.{}s",
                                       time::at(time::get_time()).ctime(),
                                       now.elapsed().as_secs(),
                                       now.elapsed().subsec_nanos()));
-            self.msg_send_to_downloader.send(res);
+            let _= self.msg_send_to_downloader.send(res);
 
             let elapsed: Duration = now.elapsed();
             if mintime > elapsed {
                 let dur: Duration = mintime-elapsed;
-                self.logging.send(format!("{} | Crawler\t\t\t--> am to fast parking for {}.{}",
+                let _= self.logging.send(format!("{} | Crawler\t\t\t--> am to fast parking for {}.{}",
                                           time::at(time::get_time()).ctime(),
                                           dur.as_secs(),
                                           dur.subsec_nanos()));
@@ -137,12 +135,12 @@ impl Crawler{
 
             _ => {
                 loop {
-                    self.logging.send(format!("{} | Crawler\t\t\t--> connection closed, trying to reopen",
+                    let _= self.logging.send(format!("{} | Crawler\t\t\t--> connection closed, trying to reopen",
                                               time::at(time::get_time()).ctime()));
                     self.client = Client::new();
                     match self.client.get(url).send() {
                         Ok(x) => {
-                            self.logging.send(format!("{} | Crawler\t\t\t--> reopening successful",
+                            let _= self.logging.send(format!("{} | Crawler\t\t\t--> reopening successful",
                                                       time::at(time::get_time()).ctime()));
                             return x;
                         }

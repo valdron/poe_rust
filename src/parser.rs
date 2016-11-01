@@ -1,10 +1,9 @@
 use serde_types::{JsonSite, Stash, Item, Property, Socket, Requirement};
-use deser;
 use regex::Regex;
 use serde_json::Value;
 use std::str::FromStr;
-use std::sync::{Mutex, Arc, mpsc};
-use std::time::{Duration, Instant};
+use std::sync::mpsc;
+use std::time::Instant;
 use time;
 
 #[derive(Debug)]
@@ -20,7 +19,7 @@ pub struct RustStash {
 }
 
 #[derive(Debug)]
-enum PropValue {
+pub enum PropValue {
     UnqJewels(String),
     Normal(Vec<(f32, f32)>),
     Nothing
@@ -44,15 +43,14 @@ pub enum ItemType {
 
 
 #[derive(Debug)]
-enum JewelryType {
+pub enum JewelryType {
     Amulet,
     Belt,
     Ring
 }
 
 #[derive(Debug)]
-enum WeaponType {
-    Unknown,
+pub enum WeaponType {
     Axe1H,
     Axe2H,
     Mace1H,
@@ -69,8 +67,7 @@ enum WeaponType {
 }
 
 #[derive(Debug)]
-enum ArmourType {
-    Unknown,
+pub enum ArmourType {
     Helm,
     Body,
     Boots,
@@ -166,18 +163,18 @@ impl Parser {
                     for st in x.stashes {
                         match self.parse_stash(st) {
                             Ok(_) => {}
-                            Err(y) => {self.to_logger.send(format!("{} ",y));}
+                            Err(y) => {let _= self.to_logger.send(format!("{} ",y));}
                         }
                     }
 
-                    self.to_logger.send(format!("{} | Parser\t\t\t--> Site {} parsed successfully {}.{}",
+                    let _= self.to_logger.send(format!("{} | Parser\t\t\t--> Site {} parsed successfully {}.{}",
                                                 time::at(time::get_time()).ctime(),
                                                 x.next_change_id,
                                                 now.elapsed().as_secs(),
                                                 now.elapsed().subsec_nanos()));
                 },
                 Err(e) => {
-                    self.to_logger.send(format!("{} | Parser\t\t\t--> Error receiving next site: {:?}",
+                    let _= self.to_logger.send(format!("{} | Parser\t\t\t--> Error receiving next site: {:?}",
                                                 time::at(time::get_time()).ctime(),
                                                 e));
 
@@ -200,7 +197,7 @@ impl Parser {
         let mut itm: Vec<RustItem> = Vec::new();
         let price: Option<(String, String, f32)> = match self.parse_price(&s_name) {
             Ok(x) => Some(x),
-            Err(y) => None,
+            Err(_) => None,
         };
         for i in stash.items{
             match self.parse_item(i,&stash.stash_id,&price) {
@@ -223,14 +220,14 @@ impl Parser {
         })
 
     }
-    pub fn parse_price(&self,s: &String) -> Result<(String, String, f32), &str>{
+    fn parse_price(&self,s: &String) -> Result<(String, String, f32), &str>{
         match self.re_for_price.captures(s.as_str()){
             Some(c) => Ok((String::from(c.at(1).unwrap()),String::from(c.at(3).unwrap()),f32::from_str(c.at(2).unwrap()).unwrap())),
             None => Err("no price")
         }
     }
 
-    pub fn parse_item(&self, item: Item, s_id: &String, s_price: &Option<(String, String, f32)>) -> Result<RustItem, &str> {
+    fn parse_item(&self, item: Item, s_id: &String, s_price: &Option<(String, String, f32)>) -> Result<RustItem, &str> {
 
 
         let item_type = match self.get_item_type(&item) {
@@ -369,7 +366,7 @@ impl Parser {
             Some(v) => {
                 let mut result: Vec<(String, i16)> = Vec::new();
                 for req in v {
-                    let value: i16 = match ((req.values[0])[0]) {
+                    let value: i16 = match (req.values[0])[0] {
                         Value::String(ref x) => i16::from_str_radix(x.as_str(), 10).unwrap(),
                         _ => return Err("could not parse requirement"),
                     };
@@ -481,7 +478,7 @@ impl Parser {
                                     },
                                 }
                             }
-                            PropValue::UnqJewels(s) => { return Err("there should be no other value in this property :/") }
+                            PropValue::UnqJewels(_) => { return Err("there should be no other value in this property :/") }
                         }
                     }
                 result.push((name, val))
@@ -492,7 +489,7 @@ impl Parser {
     }
 }
 
-    pub fn get_item_type(&self, item: &Item) -> Result<ItemType, &str> {
+    fn get_item_type(&self, item: &Item) -> Result<ItemType, &str> {
         match item.frame_type{
             4 => {
                 return Ok(ItemType::Gem)
@@ -563,7 +560,7 @@ impl Parser {
 
     }
 
-    pub fn get_jewelry_type(&self, s: &String) -> Result<JewelryType, &str> {
+    fn get_jewelry_type(&self, s: &String) -> Result<JewelryType, &str> {
         lazy_static!{
             static ref RING: Regex = Regex::new(".*Ring").unwrap();
         }
@@ -578,7 +575,7 @@ impl Parser {
         if BELT.is_match(s.as_str()) {return Ok(JewelryType::Belt)}
         Err("Amulet_type could not be determined")
     }
-    pub fn get_weapon_type(&self, s: &String) -> Result<WeaponType, &str> {
+    fn get_weapon_type(&self, s: &String) -> Result<WeaponType, &str> {
         lazy_static!{
             static ref ONEH: Regex = Regex::new(".*OneHandWeapons.*").unwrap();
         }
@@ -640,7 +637,7 @@ impl Parser {
         Err("Weapontype not found")
 
     }
-    pub fn get_armour_type(&self, s: &String) -> Result<ArmourType, &str> {
+    fn get_armour_type(&self, s: &String) -> Result<ArmourType, &str> {
         lazy_static!{
             static ref BODY: Regex = Regex::new(".*BodyArmours.*").unwrap();
         }
