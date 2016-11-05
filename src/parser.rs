@@ -82,7 +82,7 @@ pub enum ArmourType {
 pub struct RustItem {
     contained_in: String,
     item_id: String,
-  pub item_type: ItemType,
+    pub item_type: ItemType,
     league: String,
     price: Option<(String, String, f32)>,
     note: String,
@@ -112,6 +112,19 @@ pub struct RustItem {
     x: i16,
     y: i16,
     socketed_items: bool,
+
+    //additional calculations
+    //base values
+    armour: u16,
+    energy_s: u16,
+    evasion: u16,
+
+    //pseudo mods
+    resistance: i16,
+    ele_resistance: i16,
+    max_life: i16,
+
+
 }
 
 pub struct Parser {
@@ -228,12 +241,9 @@ impl Parser {
     }
 
     fn parse_item(&self, item: Item, s_id: &String, s_price: &Option<(String, String, f32)>) -> Result<RustItem, &str> {
-
-
-        let item_type = match self.get_item_type(&item) {
+        let item_type: ItemType = match self.get_item_type(&item) {
             Ok(x) => x,
             Err(x) => {
-                println!("{} ",item.item_id);
                 return Err(x);
             },
         };
@@ -245,16 +255,15 @@ impl Parser {
         }
         let ry: i16 = item.y.unwrap();
 
-        let price: Option<(String, String, f32)> = match s_price{
-            &Some((ref s1, ref s2,f))  => Some((s1.clone(),s2.clone(),f)),
-            &None => match item.note{
+        let price: Option<(String, String, f32)> = match s_price {
+            &Some((ref s1, ref s2, f)) => Some((s1.clone(), s2.clone(), f)),
+            &None => match item.note {
                 Some(ref y) => match self.parse_price(y) {
                     Ok(z) => Some(z),
                     Err(_) => None,
                 },
                 None => None,
             }
-
         };
 
         let note: String = match item.note {
@@ -289,7 +298,6 @@ impl Parser {
         let properties: Vec<(String, PropValue)> = match self.parse_props(item.properties) {
             Ok(x) => x,
             Err(x) => {
-                println!("{} ",item.item_id);
                 return Err(x);
             },
         };
@@ -299,7 +307,138 @@ impl Parser {
         };
 
 
+        let mut arm: u16 = 0;
+        let mut energy_s: u16 = 0;
+        let mut evasion: u16 = 0;
+
+        match item_type {
+            ItemType::Armour(_) => {
+                for prop in &properties {
+                    match prop {
+                        &(ref x, ref v1) if x == "Armour" => match v1 {
+                            &PropValue::Normal(ref v) => arm = v[1].0 as u16,
+                            _ => {},
+                         },
+                        &(ref x, ref v1) if x == "Energy Shield" =>match v1 {
+                            &PropValue::Normal(ref v) => energy_s = v[1].0 as u16,
+                            _ => {},
+                        },
+                        &(ref x, ref v1) if x == "Evasion" => match v1 {
+                            &PropValue::Normal(ref v) => evasion = v[1].0 as u16,
+                            _ => {},
+                        },
+                        _=>{}
+                    }
+                }
+            },
+            _ => {}
+        }
+
+
+        let mut resistance: i16  = 0;
+        let mut ele_resistance: i16 = 0;
+        let mut max_life: i16 = 0;
+
+        lazy_static!{
+                        static ref SINGLE_ELERES: Regex = Regex::new("to\\s(Fire)|(Cold)|(Lightning)\\sResistance$").unwrap();
+                        static ref DOUBLE_ELERES: Regex = Regex::new("to\\s(Fire)|(Cold)|(Lightning)\\sand\\s(Fire)|(Cold)|(Lightning)\\sResistances$").unwrap();
+                        static ref ALL_RES: Regex = Regex::new("to\\sall\\sElemental\\sResistances$").unwrap();
+                        static ref CHAOS_RES: Regex = Regex::new("to\\sChaos\\sResistance$").unwrap();
+                        static ref MAX_L:  Regex = Regex::new("to\\smaximum\\sLife").unwrap();
+                        static ref STR:  Regex = Regex::new("to\\sStrength$|(\\sand)").unwrap();
+        }
+        for mo in &explicit_mods {
+            match *mo {
+                (ref x , v1, _) if SINGLE_ELERES.is_match(x.as_str()) => {
+                    ele_resistance += v1;
+                    resistance += v1;
+                },
+                (ref x , v1, _) if DOUBLE_ELERES.is_match(x.as_str()) => {
+                    ele_resistance += 2*v1;
+                    resistance += 2*v1;
+                },
+                (ref x , v1, _) if ALL_RES.is_match(x.as_str()) => {
+                    ele_resistance += 3*v1;
+                    resistance += 3*v1;
+                },
+                (ref x , v1, _) if CHAOS_RES.is_match(x.as_str()) => {
+                    resistance += v1;
+                },
+                (ref x , v1, _) if MAX_L.is_match(x.as_str()) => {
+                    max_life += v1;
+                },
+                (ref x , v1, _) if STR.is_match(x.as_str()) => {
+                    max_life += v1/2;
+                },
+                _=>{}
+            }
+        }
+
+        for mo in &implicit_mods {
+            match *mo {
+                (ref x , v1, _) if SINGLE_ELERES.is_match(x.as_str()) => {
+                    ele_resistance += v1;
+                    resistance += v1;
+                },
+                (ref x , v1, _) if DOUBLE_ELERES.is_match(x.as_str()) => {
+                    ele_resistance += 2*v1;
+                    resistance += 2*v1;
+                },
+                (ref x , v1, _) if ALL_RES.is_match(x.as_str()) => {
+                    ele_resistance += 3*v1;
+                    resistance += 3*v1;
+                },
+                (ref x , v1, _) if CHAOS_RES.is_match(x.as_str()) => {
+                    resistance += v1;
+                },
+                (ref x , v1, _) if MAX_L.is_match(x.as_str()) => {
+                    max_life += v1;
+                },
+                (ref x , v1, _) if STR.is_match(x.as_str()) => {
+                    max_life += v1/2;
+                },
+                _=>{}
+            }
+        }
+        for mo in &crafted_mods {
+            match *mo {
+                (ref x , v1, _) if SINGLE_ELERES.is_match(x.as_str()) => {
+                    ele_resistance += v1;
+                    resistance += v1;
+                },
+                (ref x , v1, _) if DOUBLE_ELERES.is_match(x.as_str()) => {
+                    ele_resistance += 2*v1;
+                    resistance += 2*v1;
+                },
+                (ref x , v1, _) if ALL_RES.is_match(x.as_str()) => {
+                    ele_resistance += 3*v1;
+                    resistance += 3*v1;
+                },
+                (ref x , v1, _) if CHAOS_RES.is_match(x.as_str()) => {
+                    resistance += v1;
+                },
+                (ref x , v1, _) if MAX_L.is_match(x.as_str()) => {
+                    max_life += v1;
+                },
+                (ref x , v1, _) if STR.is_match(x.as_str()) => {
+                    max_life += v1/2;
+                },
+                _=>{}
+            }
+
+        }
+
+
+
+
+
         Ok(RustItem {
+            armour: arm,
+            energy_s: energy_s,
+            evasion: evasion,
+            resistance: resistance,
+            ele_resistance: ele_resistance,
+            max_life: max_life,
             price: price,
             item_type: item_type,
             contained_in: s_id.clone(),
