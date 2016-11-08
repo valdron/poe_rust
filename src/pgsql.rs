@@ -20,10 +20,6 @@ impl PostgreSql {
             from_parser: from_p,
             logging: to_logger,
         }
-
-
-
-
     }
 
 
@@ -33,9 +29,7 @@ impl PostgreSql {
             let _ = self.insert_stash(stash);
             let _= self.logging.send(format!("{} | Writer\t\t\t--> Stash written successfully in",
                                              time::at(time::get_time()).ctime()));
-
         }
-
     }
     /*
      *      tries to write complete stash in one transaction
@@ -123,8 +117,8 @@ impl PostgreSql {
             &ItemType::Weapon(ref t) => format!("{:?}",t),
             & ref t @ _ => format!("{:?}",t),
         };
-        let stmt: String = format!("SELECT id FROM {} WHERE id = $1", itype);
-        //TODO: ITEMS match trans.execute();
+        let stmt: String = format!("INSERT INTO {} VALUES", itype);
+        match trans.execute()
         unimplemented!();
     }
 

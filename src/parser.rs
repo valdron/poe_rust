@@ -101,7 +101,7 @@ pub struct RustItem {
     pub name: String,
     pub base_item: String,
     // only parse relevant Name and value
-    pub properties: Vec<(String, PropValue)>,
+    pub properties: Vec<(String, Option<Vec<(f32, f32)>>)>,
     // only parse relevant Name and value
     pub requirements: Vec<(String, i16)>,
     pub implicit_mods: Vec<(String, i16, i16)>,
@@ -312,7 +312,7 @@ impl Parser {
             Ok(x) => x,
             Err(y) => return Err(y),
         };
-        let properties: Vec<(String, PropValue)> = match self.parse_props(item.properties) {
+        let properties: Vec<(String, Option<Vec<(f32, f32)>>)> = match self.parse_props(item.properties) {
             Ok(x) => x,
             Err(x) => {
                 return Err(x);
@@ -333,15 +333,15 @@ impl Parser {
                 for prop in &properties {
                     match prop {
                         &(ref x, ref v1) if x == "Armour" => match v1 {
-                            &PropValue::Normal(ref v) => arm = v[0].0 as u16,
+                            &Some(ref v) => arm = v[0].0 as u16,
                             _ => {},
                          },
                         &(ref x, ref v1) if x == "Energy Shield" =>match v1 {
-                            &PropValue::Normal(ref v) => energy_s = v[0].0 as u16,
+                            &Some(ref v) => energy_s = v[0].0 as u16,
                             _ => {},
                         },
                         &(ref x, ref v1) if x == "Evasion" => match v1 {
-                            &PropValue::Normal(ref v) => evasion = v[0].0 as u16,
+                            &Some(ref v) => evasion = v[0].0 as u16,
                             _ => {},
                         },
                         _=>{}
@@ -356,6 +356,8 @@ impl Parser {
         let mut ele_resistance: i16 = 0;
         let mut max_life: i16 = 0;
 
+
+        // REGEX for pseudo/total mods
         lazy_static!{
             static ref SINGLE_ELERES: Regex = Regex::new("to\\s(Fire)|(Cold)|(Lightning)\\sResistance$").unwrap();
             static ref DOUBLE_ELERES: Regex = Regex::new("to\\s(Fire)|(Cold)|(Lightning)\\sand\\s(Fire)|(Cold)|(Lightning)\\sResistances$").unwrap();
@@ -365,34 +367,36 @@ impl Parser {
             static ref STR:  Regex = Regex::new("to\\sStrength$|(\\sand)").unwrap();
         }
 
-
-        for mo in &explicit_mods {
-            match *mo {
-                (ref x , v1, _) if SINGLE_ELERES.is_match(x.as_str()) => {
-                    ele_resistance += v1;
-                    resistance += v1;
-                },
-                (ref x , v1, _) if DOUBLE_ELERES.is_match(x.as_str()) => {
-                    ele_resistance += 2*v1;
-                    resistance += 2*v1;
-                },
-                (ref x , v1, _) if ALL_RES.is_match(x.as_str()) => {
-                    ele_resistance += 3*v1;
-                    resistance += 3*v1;
-                },
-                (ref x , v1, _) if CHAOS_RES.is_match(x.as_str()) => {
-                    resistance += v1;
-                },
-                (ref x , v1, _) if MAX_L.is_match(x.as_str()) => {
-                    max_life += v1;
-                },
-                (ref x , v1, _) if STR.is_match(x.as_str()) => {
-                    max_life += v1/2;
-                },
-                _=>{}
+        for mods in &[&explicit_mods, &implicit_mods, &crafted_mods] {
+            for mo in *mods {
+                match *mo {
+                    (ref x, v1, _) if SINGLE_ELERES.is_match(x.as_str()) => {
+                        ele_resistance += v1;
+                        resistance += v1;
+                    },
+                    (ref x, v1, _) if DOUBLE_ELERES.is_match(x.as_str()) => {
+                        ele_resistance += 2 * v1;
+                        resistance += 2 * v1;
+                    },
+                    (ref x, v1, _) if ALL_RES.is_match(x.as_str()) => {
+                        ele_resistance += 3 * v1;
+                        resistance += 3 * v1;
+                    },
+                    (ref x, v1, _) if CHAOS_RES.is_match(x.as_str()) => {
+                        resistance += v1;
+                    },
+                    (ref x, v1, _) if MAX_L.is_match(x.as_str()) => {
+                        max_life += v1;
+                    },
+                    (ref x, v1, _) if STR.is_match(x.as_str()) => {
+                        max_life += v1 / 2;
+                    },
+                    _ => {}
+                }
             }
         }
-
+        //old code
+        /*
         for mo in &implicit_mods {
             match *mo {
                 (ref x , v1, _) if SINGLE_ELERES.is_match(x.as_str()) => {
@@ -445,7 +449,7 @@ impl Parser {
                 _=>{}
             }
 
-        }
+        }*/
 
         Ok(RustItem {
             armour: arm,
@@ -581,10 +585,10 @@ impl Parser {
     // Parse the Properties of the Item and Return them as a Vector
     //
 
-    fn parse_props(&self, props: Option<Vec<Property>>) -> Result<Vec<(String, PropValue)>, &str> {
+    fn parse_props(&self, props: Option<Vec<Property>>) -> Result<Vec<(String, Option<Vec<(f32,f32)>>)>, &str> {
         match props {
             Some(x) => {
-                let mut result: Vec<(String, PropValue)> = Vec::new();
+                let mut result: Vec<(String, Option<Vec<(f32, f32)>>)> = Vec::new();
                 for p in x {
                     match p.name.is_empty() {
                         true => {
@@ -595,63 +599,45 @@ impl Parser {
                                     return Err("weird layout check mod");
                                 }
                             };
-                            result.push((name, PropValue::Nothing));
+                            result.push((name, None));
                             break;
                         },
                         _ => {},
                     }
-                    let mut val = PropValue::Nothing;
+
                     let name = p.name.clone();
+                    let mut prop: (String, Option<Vec<(f32,f32)>>) = (name, None);
 
                     for v in p.values {
-                        match val {
-                            PropValue::Nothing => {
-                                let caps: Option<super::regex::Captures> = match v[0] {
-                                    Value::String(ref s) => {
-                                        self.re_for_props.captures(s.as_str())
+                        let caps = match v[0] {
+                            Value::String(ref s) => {
+                                self.re_for_props.captures(s.as_str())
+                            }
+                            _ => return Err("none string value in property")
+                        };
+                        match caps {
+                            None => {
+                                match prop {
+                                    (_, None) => {}
+                                    (_, Some(_)) => return Err("Found no caps after normal Propvalue on")
+                                }
+                                break;
+                            }
+                            Some(x) => {
+                                let val1 = f32::from_str(x.at(1).unwrap_or("0.0")).unwrap();
+                                let val2 = f32::from_str(x.at(2).unwrap_or("0.0")).unwrap();
+                                match prop {
+                                    (_, None) => {
+                                        prop.1 = Some(vec!((val1,val2)));
+                                    },
+                                    (_, Some( ref mut v)) => {
+                                        v.push((val1, val2));
                                     }
-                                    _ => return Err("none string value in property")
-                                };
-                                match caps {
-                                    Some(x) => {
-                                        let val1 = f32::from_str(x.at(1).unwrap_or("0.0")).unwrap();
-                                        let val2 = f32::from_str(x.at(2).unwrap_or("0.0")).unwrap();
-                                        val = PropValue::Normal(vec![(val1, val2)]);
-                                    },
-
-                                    None => {
-                                        let s = match v[0] {
-                                            Value::String(ref s) => s.clone(),
-                                            _ => { return Err("very weird check mod"); }
-                                        };
-                                        val = PropValue::UnqJewels(s)
-                                    },
                                 }
                             },
-                            PropValue::Normal(ref mut n) => {
-                                let caps: Option<super::regex::Captures> = match v[0] {
-                                    Value::String(ref s) => {
-                                        self.re_for_props.captures(s.as_str())
-                                    }
-                                    _ => return Err("none string value in property")
-                                };
-                                match caps {
-                                    Some(x) => {
-                                        let val1 = f32::from_str(x.at(1).unwrap_or("0.0")).unwrap();
-                                        let val2 = f32::from_str(x.at(2).unwrap_or("0.0")).unwrap();
-                                        n.push((val1, val2))
-
-                                    },
-
-                                    None => {
-                                        return Err("expected another normal Porperty")
-                                        },
-                                    }
-                                }
-                            PropValue::UnqJewels(_) => { return Err("there should be no other value in this property :/") }
-                            }
                         }
-                    result.push((name, val))
+                        }
+                    result.push(prop)
                 }
                 Ok(result)
             },
