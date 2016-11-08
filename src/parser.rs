@@ -8,14 +8,14 @@ use time;
 
 #[derive(Debug)]
 pub struct RustStash {
-    acc_name: String,
-    last_char_name: String,
-    stash_id: String,
-    stash_type: String,
-    stash_name: String,
-    is_public: bool,
-    item_nr: usize,
-    items: Vec<RustItem>
+    pub acc_name: String,
+    pub last_char_name: String,
+    pub stash_id: String,
+    pub stash_type: String,
+    pub stash_name: String,
+    pub is_public: bool,
+    pub item_nr: i16,
+    pub items: Vec<RustItem>
 }
 
 #[derive(Debug)]
@@ -80,52 +80,54 @@ pub enum ArmourType {
 
 #[derive(Debug)]
 pub struct RustItem {
-    contained_in: String,
-    item_id: String,
+    pub contained_in: String,
+    pub item_id: String,
     pub item_type: ItemType,
-    league: String,
-    price: Option<(String, String, f32)>,
-    note: String,
-    verified: bool,
-    identified: bool,
-    corrupted: bool,
-    locked_to_char: bool,
-    width: i16,
-    height: i16,
-    item_level: i16,
-    support: Option<bool>,
+    pub league: String,
+    pub price: Option<(String, String, f32)>,
+    pub note: String,
+    pub verified: bool,
+    pub identified: bool,
+    pub corrupted: bool,
+    pub locked_to_char: bool,
+    pub width: i16,
+    pub height: i16,
+    pub item_level: i16,
+    pub support: Option<bool>,
     // Save as Color links with - nonlinks with |
-    sockets: String,
-    socket_nr: u8,
-    socket_li: u8,
-    name: String,
-    base_item: String,
+    pub sockets: String,
+    pub socket_nr: i8,
+    pub socket_li: i8,
+    pub name: String,
+    pub base_item: String,
     // only parse relevant Name and value
-    properties: Vec<(String, PropValue)>,
+    pub properties: Vec<(String, PropValue)>,
     // only parse relevant Name and value
-    requirements: Vec<(String, i16)>,
-    implicit_mods: Vec<(String, i16, i16)>,
-    explicit_mods: Vec<(String, i16, i16)>,
-    crafted_mods: Vec<(String, i16, i16)>,
-    enchanted_mods: Vec<(String, i16, i16)>,
-    frame_type: i16,
-    x: i16,
-    y: i16,
-    socketed_items: bool,
+    pub requirements: Vec<(String, i16)>,
+    pub implicit_mods: Vec<(String, i16, i16)>,
+    pub explicit_mods: Vec<(String, i16, i16)>,
+    pub crafted_mods: Vec<(String, i16, i16)>,
+    pub enchanted_mods: Vec<(String, i16, i16)>,
+    pub frame_type: i16,
+    pub x: i16,
+    pub y: i16,
+    pub socketed_items: bool,
 
     //additional calculations
     //base values
-    armour: u16,
-    energy_s: u16,
-    evasion: u16,
+    pub armour: u16,
+    pub energy_s: u16,
+    pub evasion: u16,
 
     //pseudo mods
-    resistance: i16,
-    ele_resistance: i16,
-    max_life: i16,
-
-
+    pub resistance: i16,
+    pub ele_resistance: i16,
+    pub max_life: i16,
 }
+
+//
+// TODO: REFACTOR REGEX IN LAZYSTATICS
+//
 
 pub struct Parser {
     re: Vec<Regex>,
@@ -140,12 +142,14 @@ pub struct Parser {
     re_for_mappiece: Regex,
     re_for_price: Regex,
     receive_from_deser: mpsc::Receiver<JsonSite>,
-    send_to_dbwriter: mpsc::Sender<String>,
+    send_to_dbwriter: mpsc::Sender<RustStash>,
     to_logger: mpsc::Sender<String>
 }
 
 impl Parser {
-    pub fn new(send: mpsc::Sender<String>, recv: mpsc::Receiver<JsonSite>, to_logger: mpsc::Sender<String>) -> Parser {
+
+    //Constructor
+    pub fn new(send: mpsc::Sender<RustStash>, recv: mpsc::Receiver<JsonSite>, to_logger: mpsc::Sender<String>) -> Parser {
         let v = vec![Regex::new("^\\+?([0-9]+)%?.*").unwrap(),
                      Regex::new(".*([0-9]+).*([0-9]+)?.*").unwrap(),
                      Regex::new(".*").unwrap()];
@@ -167,6 +171,7 @@ impl Parser {
         }
     }
 
+
     pub fn start_parsing(&mut self){
         loop {
             let site = self.receive_from_deser.recv();
@@ -175,7 +180,7 @@ impl Parser {
                     let now = Instant::now();
                     for st in x.stashes {
                         match self.parse_stash(st) {
-                            Ok(_) => {}
+                            Ok(stash) => {let _ = self.send_to_dbwriter.send(stash);}
                             Err(y) => {let _= self.to_logger.send(format!("{} ",y));}
                         }
                     }
@@ -203,26 +208,29 @@ impl Parser {
             Value::String(s) => s,
             _ => {String::new()}
         };
+
         let s_name = match stash.stash_name{
             Some(x) => x,
             None => String::new(),
         };
+
         let mut itm: Vec<RustItem> = Vec::new();
         let price: Option<(String, String, f32)> = match self.parse_price(&s_name) {
             Ok(x) => Some(x),
             Err(_) => None,
         };
+
         for i in stash.items{
-            match self.parse_item(i,&stash.stash_id,&price) {
+            match self.parse_item(i,&stash.stash_id, &price) {
                 Ok(x) => itm.push(x),
                 Err(y) => {
                     return Err(y)
-            }
+                }
             }
         }
 
         Ok(RustStash{
-            item_nr: itm.len(),
+            item_nr: itm.len() as i16,
             stash_name: s_name,
             items: itm,
             acc_name: acc,
@@ -231,14 +239,23 @@ impl Parser {
             stash_type: stash.stash_type,
             is_public: stash.is_public,
         })
-
     }
+
+    //
+    // Parse Price out of string
+    //
+
     fn parse_price(&self,s: &String) -> Result<(String, String, f32), &str>{
         match self.re_for_price.captures(s.as_str()){
-            Some(c) => Ok((String::from(c.at(1).unwrap()),String::from(c.at(3).unwrap()),f32::from_str(c.at(2).unwrap()).unwrap())),
+            Some(c) => Ok((String::from(c.at(1).unwrap()),String::from(c.at(3).unwrap()),
+                           f32::from_str(c.at(2).unwrap()).unwrap())),
             None => Err("no price")
         }
     }
+
+    // TODO: REFACTORING move pseudo and total mods in own method
+    // Parse Item and return the rust-native one
+    //
 
     fn parse_item(&self, item: Item, s_id: &String, s_price: &Option<(String, String, f32)>) -> Result<RustItem, &str> {
         let item_type: ItemType = match self.get_item_type(&item) {
@@ -255,9 +272,9 @@ impl Parser {
         }
         let ry: i16 = item.y.unwrap();
 
-        let price: Option<(String, String, f32)> = match s_price {
-            &Some((ref s1, ref s2, f)) => Some((s1.clone(), s2.clone(), f)),
-            &None => match item.note {
+        let price: Option<(String, String, f32)> = match *s_price {
+            Some((ref s1, ref s2, f)) => Some((s1.clone(), s2.clone(), f)),
+            None => match item.note {
                 Some(ref y) => match self.parse_price(y) {
                     Ok(z) => Some(z),
                     Err(_) => None,
@@ -270,7 +287,7 @@ impl Parser {
             Some(s) => s,
             None => String::new()
         };
-        let (sockets, socket_nr, socket_li): (String, u8, u8) = self.parse_socket(item.sockets);
+        let (sockets, socket_nr, socket_li): (String, i8, i8) = self.parse_socket(item.sockets);
 
         let socketed_items: bool = match item.socketed_items.len() {
             0 => false,
@@ -316,15 +333,15 @@ impl Parser {
                 for prop in &properties {
                     match prop {
                         &(ref x, ref v1) if x == "Armour" => match v1 {
-                            &PropValue::Normal(ref v) => arm = v[1].0 as u16,
+                            &PropValue::Normal(ref v) => arm = v[0].0 as u16,
                             _ => {},
                          },
                         &(ref x, ref v1) if x == "Energy Shield" =>match v1 {
-                            &PropValue::Normal(ref v) => energy_s = v[1].0 as u16,
+                            &PropValue::Normal(ref v) => energy_s = v[0].0 as u16,
                             _ => {},
                         },
                         &(ref x, ref v1) if x == "Evasion" => match v1 {
-                            &PropValue::Normal(ref v) => evasion = v[1].0 as u16,
+                            &PropValue::Normal(ref v) => evasion = v[0].0 as u16,
                             _ => {},
                         },
                         _=>{}
@@ -340,13 +357,15 @@ impl Parser {
         let mut max_life: i16 = 0;
 
         lazy_static!{
-                        static ref SINGLE_ELERES: Regex = Regex::new("to\\s(Fire)|(Cold)|(Lightning)\\sResistance$").unwrap();
-                        static ref DOUBLE_ELERES: Regex = Regex::new("to\\s(Fire)|(Cold)|(Lightning)\\sand\\s(Fire)|(Cold)|(Lightning)\\sResistances$").unwrap();
-                        static ref ALL_RES: Regex = Regex::new("to\\sall\\sElemental\\sResistances$").unwrap();
-                        static ref CHAOS_RES: Regex = Regex::new("to\\sChaos\\sResistance$").unwrap();
-                        static ref MAX_L:  Regex = Regex::new("to\\smaximum\\sLife").unwrap();
-                        static ref STR:  Regex = Regex::new("to\\sStrength$|(\\sand)").unwrap();
+            static ref SINGLE_ELERES: Regex = Regex::new("to\\s(Fire)|(Cold)|(Lightning)\\sResistance$").unwrap();
+            static ref DOUBLE_ELERES: Regex = Regex::new("to\\s(Fire)|(Cold)|(Lightning)\\sand\\s(Fire)|(Cold)|(Lightning)\\sResistances$").unwrap();
+            static ref ALL_RES: Regex = Regex::new("to\\sall\\sElemental\\sResistances$").unwrap();
+            static ref CHAOS_RES: Regex = Regex::new("to\\sChaos\\sResistance$").unwrap();
+            static ref MAX_L:  Regex = Regex::new("to\\smaximum\\sLife").unwrap();
+            static ref STR:  Regex = Regex::new("to\\sStrength$|(\\sand)").unwrap();
         }
+
+
         for mo in &explicit_mods {
             match *mo {
                 (ref x , v1, _) if SINGLE_ELERES.is_match(x.as_str()) => {
@@ -428,10 +447,6 @@ impl Parser {
 
         }
 
-
-
-
-
         Ok(RustItem {
             armour: arm,
             energy_s: energy_s,
@@ -471,13 +486,17 @@ impl Parser {
         })
     }
 
-    fn parse_socket(&self, s: Vec<Socket>) -> (String, u8, u8) {
+    //
+    // Parse Sockets
+    // Return String: Example: |D-D-S|I-D| => 2 socket-groups First: 2Green 1Red Second 1Blue 1Green
+
+    fn parse_socket(&self, s: Vec<Socket>) -> (String, i8, i8) {
         match s.len() {
             0 => return ("".to_string(), 0, 0),
             _ => {
-                let mut number: u8 = 1;
-                let mut counter: u8 = 0;
-                let mut max: u8 = 0;
+                let mut number: i8 = 1;
+                let mut counter: i8 = 0;
+                let mut max: i8 = 0;
                 let mut curr_group: i16 = -1;
                 let mut str = String::new();
                 for s in s.iter() {
@@ -500,7 +519,11 @@ impl Parser {
         }
     }
 
-    fn parse_requirements(&self, r: Option<Vec<Requirement>>) -> Result<Vec<(String, i16)>, &'static str> {
+    //
+    // Parse Requirements of the Item and return as a Vector
+    //
+
+    fn parse_requirements(&self, r: Option<Vec<Requirement>>) -> Result<Vec<(String, i16)>, &str> {
         match r {
             Some(v) => {
                 let mut result: Vec<(String, i16)> = Vec::new();
@@ -516,6 +539,10 @@ impl Parser {
             None => Ok(Vec::new())
         }
     }
+
+    // TODO: REFACTOR
+    // Parse the mods of the Item and return as a Vector
+    //
 
     fn parse_mods(&self, mods: Option<Vec<String>>) -> Result<Vec<(String, i16, i16)>, &str> {
         match mods {
@@ -549,6 +576,10 @@ impl Parser {
             None => Ok(Vec::new())
         }
     }
+
+    // TODO: REFACTOR THE PROPVALUE OUT
+    // Parse the Properties of the Item and Return them as a Vector
+    //
 
     fn parse_props(&self, props: Option<Vec<Property>>) -> Result<Vec<(String, PropValue)>, &str> {
         match props {
@@ -614,142 +645,111 @@ impl Parser {
 
                                     None => {
                                         return Err("expected another normal Porperty")
-                                    },
+                                        },
+                                    }
                                 }
-                            }
                             PropValue::UnqJewels(_) => { return Err("there should be no other value in this property :/") }
+                            }
                         }
-                    }
-                result.push((name, val))
-            }
-            Ok(result)
-        },
+                    result.push((name, val))
+                }
+                Ok(result)
+            },
         None => return Ok(Vec::new()),
+        }
     }
-}
+
+    //
+    // Trying to determine the type of item and returning the appropriate Variant
+    //
 
     fn get_item_type(&self, item: &Item) -> Result<ItemType, &str> {
+
+        //Check if determenible by frametype
         match item.frame_type{
-            4 => {
-                return Ok(ItemType::Gem)
-            }
-            5 => {
-                return Ok(ItemType::Currency)
-            }
-            6 => {
-                return Ok(ItemType::DivCard)
-            }
-            8 => {
-                return Ok(ItemType::Prophecy)
-            }
+            4 => return Ok(ItemType::Gem),
+            5 => return Ok(ItemType::Currency),
+            6 => return Ok(ItemType::DivCard),
+            8 => return Ok(ItemType::Prophecy),
             _ => {}
         }
 
-        match self.re_for_jewels.is_match(&item.base_item.as_str()) {
-            true => {return Ok(ItemType::Jewel)}
-            _ => {}
-        }
-        match self.re_for_flasks.is_match(&item.base_item.as_str()) {
-            true => {return Ok(ItemType::Flask)}
-            _ => {}
-        }
-        match self.re_for_jewelry.is_match(&item.base_item.as_str()){
-            true => {
+        //check if it is a jewel by type line
+        if self.re_for_jewels.is_match(&item.base_item.as_str()) {return Ok(ItemType::Jewel)}
+
+        //check if it is a flask by typeline
+        if self.re_for_flasks.is_match(&item.base_item.as_str()) {return Ok(ItemType::Flask)}
+
+        //check if it is jewelry by typeline and determine wich kind
+        if self.re_for_jewelry.is_match(&item.base_item.as_str()) {
                 match self.get_jewelry_type(&item.base_item) {
-                    Ok(x) => {return Ok(ItemType::Jewelry(x));}
-                    Err(e) => {return Err(e)}
+                    Ok(x) => return Ok(ItemType::Jewelry(x)),
+                    Err(e) => return Err(e),
                 }
-            }
-            _ => {}
         }
 
-        match self.re_for_map.is_match(&item.base_item.as_str()){
-            true => {
-                return Ok(ItemType::Map);
-            }
-            _ => {}
-        }
-        match self.re_for_mappiece.is_match(&item.base_item.as_str()){
-            true => {
-                return Ok(ItemType::MapPiece);
-            }
-            _ => {}
-        }
+        //check if it is a map by typeline
+        if self.re_for_map.is_match(&item.base_item.as_str()){return Ok(ItemType::Map)}
 
-        match self.re_for_weapons.is_match(&item.icon) {
-            true => {
+        //check if it is a mappiece by typeline
+        if self.re_for_mappiece.is_match(&item.base_item.as_str()) {return Ok(ItemType::MapPiece)}
+
+        //check if it is a weapen and when which kind
+        if self.re_for_weapons.is_match(&item.icon) {
                 match self.get_weapon_type(&item.icon) {
-                    Ok(x) => {return Ok(ItemType::Weapon(x))}
-                    Err(e) => {return Err(e)}
+                    Ok(x) => return Ok(ItemType::Weapon(x)),
+                    Err(e) => return Err(e),
                 }
-            }
-            _ => {}
         }
-        match self.re_for_armour.is_match(&item.icon){
-            true => {
+
+        //check if it is armour and when which kind
+        if self.re_for_armour.is_match(&item.icon){
                 match self.get_armour_type(&item.icon) {
-                    Ok(x) => {return Ok(ItemType::Armour(x))}
-                    Err(e) => {return Err(e)}
+                    Ok(x) => return Ok(ItemType::Armour(x)),
+                    Err(e) => return Err(e),
                 }
-            }
-            _ => {}
         }
+
         Ok(ItemType::Unknown)
-
-
     }
 
+    //
+    // Determine which kind of Jewelry it is by trying to match it with RegEx
+    //
+
     fn get_jewelry_type(&self, s: &String) -> Result<JewelryType, &str> {
+
         lazy_static!{
-            static ref RING: Regex = Regex::new(".*Ring").unwrap();
+            static ref RING: Regex = Regex::new("Ring").unwrap();
+            static ref AMULET: Regex = Regex::new("(Amulet)|(Talisman)").unwrap();
+            static ref BELT: Regex = Regex::new("(Belt)|(Sash)").unwrap();
         }
-        lazy_static!{
-            static ref AMULET: Regex = Regex::new(".*(Amulet)|(Talisman)").unwrap();
-        }
-        lazy_static!{
-            static ref BELT: Regex = Regex::new(".*(Belt)|(Sash)").unwrap();
-        }
+
         if RING.is_match(s.as_str()) {return Ok(JewelryType::Ring)}
         if AMULET.is_match(s.as_str()) {return Ok(JewelryType::Amulet)}
         if BELT.is_match(s.as_str()) {return Ok(JewelryType::Belt)}
+
         Err("Amulet_type could not be determined")
     }
+
+    //
+    // Determine which kind of Weapon it is by trying to match it with RegEx
+    //
+
     fn get_weapon_type(&self, s: &String) -> Result<WeaponType, &str> {
         lazy_static!{
-            static ref ONEH: Regex = Regex::new(".*OneHandWeapons.*").unwrap();
-        }
-        lazy_static!{
-                        static ref TWOH: Regex = Regex::new(".*TwoHandWeapons.*").unwrap();
-        }
-        lazy_static!{
-                        static ref AXE: Regex = Regex::new(".*Axe.*").unwrap();
-        }
-        lazy_static!{
-                        static ref SWORD: Regex = Regex::new(".*Sword.*").unwrap();
-        }
-        lazy_static!{
-                        static ref MACE: Regex = Regex::new(".*Mace.*").unwrap();
-        }
-        lazy_static!{
-                        static ref BOW: Regex = Regex::new(".*Bows.*").unwrap();
-        }
-        lazy_static!{
-                        static ref WAND: Regex = Regex::new(".*Wands.*").unwrap();
-        }
-        lazy_static!{
-                        static ref CLAW: Regex = Regex::new(".*Claws.*").unwrap();
-        }
-        lazy_static!{
-                        static ref STAFF: Regex = Regex::new(".*Staves.*").unwrap();
-        }
-        lazy_static!{
-                        static ref DAGGER: Regex = Regex::new(".*Daggers.*").unwrap();
-        }
-        lazy_static!{
-                        static ref SCEPTER: Regex = Regex::new(".*Scepter.*").unwrap();
-        }
-        lazy_static!{
-                        static ref RAPIER: Regex = Regex::new(".*Rapier.*").unwrap();
+            static ref ONEH: Regex = Regex::new("OneHandWeapons").unwrap();
+            static ref TWOH: Regex = Regex::new("TwoHandWeapons").unwrap();
+            static ref AXE: Regex = Regex::new("Axe").unwrap();
+            static ref SWORD: Regex = Regex::new("Sword").unwrap();
+            static ref MACE: Regex = Regex::new("Mace").unwrap();
+            static ref BOW: Regex = Regex::new("Bows").unwrap();
+            static ref WAND: Regex = Regex::new("Wands").unwrap();
+            static ref CLAW: Regex = Regex::new("Claws").unwrap();
+            static ref STAFF: Regex = Regex::new("Staves").unwrap();
+            static ref DAGGER: Regex = Regex::new("Daggers").unwrap();
+            static ref SCEPTER: Regex = Regex::new("Scepter").unwrap();
+            static ref RAPIER: Regex = Regex::new("Rapier").unwrap();
         }
 
 
@@ -773,27 +773,23 @@ impl Parser {
             if STAFF.is_match(s.as_str()) {return Ok(WeaponType::Staff)}
             if BOW.is_match(s.as_str()) {return Ok(WeaponType::Bow)}
         }
+
         Err("Weapontype not found")
 
     }
+
+    //
+    // Determine which kind of Armour it is by trying to match it with RegEx
+    //
+
     fn get_armour_type(&self, s: &String) -> Result<ArmourType, &str> {
         lazy_static!{
-            static ref BODY: Regex = Regex::new(".*BodyArmours.*").unwrap();
-        }
-        lazy_static!{
-            static ref HELM: Regex = Regex::new(".*Helmets.*").unwrap();
-        }
-        lazy_static!{
-            static ref SHIELD: Regex = Regex::new(".*Shields.*").unwrap();
-        }
-        lazy_static!{
-            static ref GLOVES: Regex = Regex::new(".*Gloves.*").unwrap();
-        }
-        lazy_static!{
-            static ref BOOTS: Regex = Regex::new(".*Boots.*").unwrap();
-        }
-        lazy_static!{
-            static ref QUIVER: Regex = Regex::new(".*Quiver.*").unwrap();
+            static ref BODY: Regex = Regex::new("BodyArmours").unwrap();
+            static ref HELM: Regex = Regex::new("Helmets").unwrap();
+            static ref SHIELD: Regex = Regex::new("Shields").unwrap();
+            static ref GLOVES: Regex = Regex::new("Gloves").unwrap();
+            static ref BOOTS: Regex = Regex::new("Boots").unwrap();
+            static ref QUIVER: Regex = Regex::new("Quiver").unwrap();
         }
 
         if BODY.is_match(s.as_str()) {return Ok(ArmourType::Body)}
@@ -802,6 +798,7 @@ impl Parser {
         if GLOVES.is_match(s.as_str()) {return Ok(ArmourType::Gloves)}
         if BOOTS.is_match(s.as_str()) {return Ok(ArmourType::Boots)}
         if QUIVER.is_match(s.as_str()) {return Ok(ArmourType::Quiver)}
+
         Err("Armour Type not found")
 
     }

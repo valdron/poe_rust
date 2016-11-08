@@ -30,11 +30,11 @@ fn main() {
     let (to_logger, logger_recv) = mpsc::channel();
     let (send_dw_to_deser, recv_deser_from_dw) = mpsc::channel();
     let (send_deser_to_parser, recv_parser_from_deser) = mpsc::channel();
-    let (send_todb, _) = mpsc::channel();
+    let (send_todb, from_parser) = mpsc::channel();
     let mut downloader = downloader::Downloader::new(send_dw_to_deser,to_logger.clone());
 
     thread::spawn( move || {
-        downloader.init( String::from("7222850-7781124-7106063-8472575-7898327"));
+        downloader.init( String::from(""));//"7222850-7781124-7106063-8472575-7898327"));
     });
 
     let mut deser = deser::PoeDeser::new(send_deser_to_parser,recv_deser_from_dw,to_logger.clone());
@@ -47,10 +47,18 @@ fn main() {
     thread::spawn(move|| {
         par.start_parsing();
     });
+
+    let writer = pgsql::PostgreSql::new(from_parser,to_logger.clone());
+    thread::spawn(move|| {
+        writer.init();
+    });
+
     let logger = Logger::new(logger_recv);
     thread::spawn(move|| {
         logger.init();
     });
+
+
 
     loop {
         thread::park();
