@@ -12,3 +12,5 @@ hyper = ""
 lazy_static = ""
 time = ""
 postgres = ""
+postgres-derive = {git = "https://github.com/sfackler/rust-postgres-derive" }
+postgres-derive-macros = ""
