@@ -1,5 +1,6 @@
 use postgres::{Connection, TlsMode};
 use postgres::transaction::Transaction;
+use postgres::types::ToSql;
 use parser::*;
 use std::sync::mpsc::{Sender, Receiver};
 use std::string::String;
@@ -49,7 +50,7 @@ impl PostgreSql {
         //write stash data
         let present: bool = self.is_present_stash(&stash, &trans).unwrap();
         match present{
-            true => {match trans.execute("UPDATE stashes SET (acc_name, last_char_name, stash_type, stash_name, item_nr, is_public) = ($2, $3, $4, $5, $6, $7) WHERE stash_id = $1",
+            true => {match trans.execute("UPDATE stashes SET (acc_name, last_char_name, stash_type, stash_name, is_public, item_nr) = ($2, $3, $4, $5, $6, $7) WHERE stash_id = $1",
                                   &[&stash.stash_id,
                                   &stash.acc_name,
                                   &stash.last_char_name,
@@ -58,7 +59,7 @@ impl PostgreSql {
                                   &stash.is_public,
                                   &stash.item_nr]){
                 Ok(_) => {},
-                Err(y) => {let _ = self.logging.send(format!("{:?}",y));}
+                Err(y) => {return Err(format!("{:?}",y));}
             }
             }, // execute statement update
             false => {
@@ -71,7 +72,7 @@ impl PostgreSql {
                                   &stash.is_public,
                                   &stash.item_nr]){
                     Ok(_) => {},
-                    Err(y) => {let _ = self.logging.send(format!("{:?}",y));}
+                    Err(y) => {return Err(format!("{:?}",y));}
                 }
 
 
@@ -118,10 +119,45 @@ impl PostgreSql {
 
     fn insert_item(&self, item: &RustItem, trans: &Transaction) -> Result<&str,String>{
         let itype: String = format!("{:?}",item.item_type);
-        let stmt: String = format!("INSERT INTO {} VALUES ($1)", itype);
-        match trans.execute(stmt.as_str(),&[&item]){
+        let stmt: String = format!("INSERT INTO {} VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34 , $35)", itype);
+
+        match trans.execute(stmt.as_str(),&[&item.item_id,
+            &item.contained_in,
+            &item.item_type,
+            &item.league,
+            &item.price,
+            &item.note,
+            &item.verified,
+            &item.corrupted,
+            &item.identified,
+            &item.locked_to_char,
+            &item.width,
+            &item.height,
+            &item.item_level,
+            &item.support,
+            &item.sockets,
+            &item.socket_nr,
+            &item.socket_li,
+            &item.name,
+            &item.base_item,
+            &item.properties,
+            &item.requirements,
+            &item.implicit_mods,
+            &item.explicit_mods,
+            &item.enchanted_mods,
+            &item.crafted_mods,
+            &item.frame_type,
+            &item.x,
+            &item.y,
+            &item.socketed_items,
+            &item.armour,
+            &item.energy_s,
+            &item.evasion,
+            &item.resistance,
+            &item.ele_resistance,
+            &item.max_life]){
             Ok(x) => Ok("item written"),
-            Err(x) => Err(format!("{:?}",x))
+            Err(x) => Err(format!("Item Error({}){:?}",item.item_id,x))
         }
     }
 
@@ -145,7 +181,9 @@ impl PostgreSql {
             Ok(ref x) => Ok(!x.is_empty()),
             Err(e) => Err(format!("Error in Postgres is_present_stash {:?}",e))
         }
+
     }
+
 
 
 }

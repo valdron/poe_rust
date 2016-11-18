@@ -19,6 +19,7 @@ pub struct RustStash {
 }
 
 #[derive(Debug,FromSql,ToSql)]
+#[postgres(name = "itemtype")]
 pub enum ItemType {
     Unknown,
     DivinationCard,
@@ -54,7 +55,7 @@ pub enum ItemType {
 }
 
 #[derive(Debug, FromSql, ToSql)]
-#[postgres(name = "PoeMod")]
+#[postgres(name = "poemod")]
 pub struct RustMod{
     name: String,
     #[postgres(name = "value1")]
@@ -64,32 +65,33 @@ pub struct RustMod{
 }
 
 #[derive(Debug, FromSql, ToSql)]
-#[postgres(name = "Requirement")]
+#[postgres(name = "requirement")]
 pub struct RustReq{
     name: String,
+    #[postgres(name = "value")]
     val: i16,
 }
 
 #[derive(Debug, Clone, FromSql, ToSql)]
-#[postgres(name = "Price")]
+#[postgres(name = "price")]
 pub struct Price {
     #[postgres(name = "prefix")]
-    pref: String,
+    prefix: String,
     #[postgres(name = "value")]
-    amount: f32,
+    value: f32,
     #[postgres(name = "suffix")]
-    suff: String,
+    suffix: String,
 }
 
 #[derive(Debug, FromSql, ToSql)]
-#[postgres(name = "Property")]
+#[postgres(name = "property")]
 pub struct RustProperty{
     name: String,
     values: Option<Vec<PropValues>>
 }
 
 #[derive(Debug, FromSql, ToSql)]
-#[postgres(name = "PropertyValue")]
+#[postgres(name = "propertyvalue")]
 pub struct PropValues {
     #[postgres(name = "value1")]
     val1: f32,
@@ -115,8 +117,8 @@ pub struct RustItem {
     pub support: Option<bool>,
     // Save as Color links with - nonlinks with |
     pub sockets: String,
-    pub socket_nr: i8,
-    pub socket_li: i8,
+    pub socket_nr: i16,
+    pub socket_li: i16,
     pub name: String,
     pub base_item: String,
     // only parse relevant Name and value
@@ -266,9 +268,9 @@ impl Parser {
 
     fn parse_price(&self,s: &String) -> Result<Price, &str>{
         match self.re_for_price.captures(s.as_str()){
-            Some(c) => Ok(Price{pref: String::from(c.at(1).unwrap()),
-                           amount: f32::from_str(c.at(2).unwrap()).unwrap(),
-                            suff: String::from(c.at(3).unwrap()),}),
+            Some(c) => Ok(Price{prefix: String::from(c.at(1).unwrap()),
+                           value: f32::from_str(c.at(2).unwrap()).unwrap(),
+                            suffix: String::from(c.at(3).unwrap()),}),
             None => Err("no price")
         }
     }
@@ -307,7 +309,7 @@ impl Parser {
             Some(s) => s,
             None => String::new()
         };
-        let (sockets, socket_nr, socket_li): (String, i8, i8) = self.parse_socket(item.sockets);
+        let (sockets, socket_nr, socket_li): (String, i16, i16) = self.parse_socket(item.sockets);
 
         let socketed_items: bool = match item.socketed_items.len() {
             0 => false,
@@ -511,13 +513,13 @@ impl Parser {
     // Parse Sockets
     // Return String: Example: |D-D-S|I-D| => 2 socket-groups First: 2Green 1Red Second 1Blue 1Green
 
-    fn parse_socket(&self, s: Vec<Socket>) -> (String, i8, i8) {
+    fn parse_socket(&self, s: Vec<Socket>) -> (String, i16, i16) {
         match s.len() {
             0 => return ("".to_string(), 0, 0),
             _ => {
-                let mut number: i8 = 1;
-                let mut counter: i8 = 0;
-                let mut max: i8 = 0;
+                let mut number: i16 = 1;
+                let mut counter: i16 = 0;
+                let mut max: i16 = 0;
                 let mut curr_group: i16 = -1;
                 let mut str = String::new();
                 for s in s.iter() {
