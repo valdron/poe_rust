@@ -39,8 +39,7 @@ impl PostgreSql {
 
         }
     }
-    /*
-     *      tries to write complete stash in one transaction
+    /*  tries to write complete stash in one transaction
      *
      *
      */
